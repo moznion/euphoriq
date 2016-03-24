@@ -18,7 +18,7 @@ import net.moznion.euphoriq.worker.factory.WorkerFactory;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class DefaultWorkerPool implements Worker {
+public class SimpleWorkerPool implements Worker {
     private final WorkerFactory workerFactory;
     private final ThreadFactory threadFactory;
     private final ConcurrentHashMap<Worker, Thread> workerThreadMap;
@@ -26,7 +26,7 @@ public class DefaultWorkerPool implements Worker {
     private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
     private final EventHandler workerNumAdjuster;
 
-    public DefaultWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
+    public SimpleWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
         this.workerNum = workerNum;
         this.workerFactory = workerFactory;
         threadFactory = Executors.defaultThreadFactory();

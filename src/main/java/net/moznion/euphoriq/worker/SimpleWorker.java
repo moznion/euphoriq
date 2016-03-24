@@ -20,7 +20,7 @@ import static net.moznion.euphoriq.worker.Event.FINISHED;
 import static net.moznion.euphoriq.worker.Event.STARTED;
 
 @Slf4j
-public class DefaultWorker implements Worker {
+public class SimpleWorker implements Worker {
     private final JobBroker jobBroker;
     private final ConcurrentHashMap<Class<?>, Class<? extends Action<?>>> actionMap;
     private final AtomicReference<Thread> threadRef;
@@ -28,7 +28,7 @@ public class DefaultWorker implements Worker {
 
     private boolean isShuttingDown;
 
-    public DefaultWorker(final JobBroker jobBroker) {
+    public SimpleWorker(final JobBroker jobBroker) {
         this.jobBroker = jobBroker;
 
         actionMap = new ConcurrentHashMap<>();
