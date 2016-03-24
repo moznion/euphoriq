@@ -147,6 +147,7 @@ public class SimpleWorker implements Worker {
 
     private void handleStartedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
+                                                           jobBroker,
                                                            Optional.of(actionClass),
                                                            id,
                                                            arg,
@@ -158,6 +159,7 @@ public class SimpleWorker implements Worker {
                                    final Object arg,
                                    final RuntimeException e) {
         eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
+                                                          jobBroker,
                                                           Optional.of(actionClass),
                                                           id,
                                                           arg,
@@ -166,6 +168,7 @@ public class SimpleWorker implements Worker {
 
     private void handleFinishedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
+                                                            jobBroker,
                                                             Optional.of(actionClass),
                                                             id,
                                                             arg,
@@ -174,6 +177,7 @@ public class SimpleWorker implements Worker {
 
     private void handleCanceledEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(CANCELED).forEach(h -> h.handle(this,
+                                                            jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
                                                             arg,
@@ -185,6 +189,7 @@ public class SimpleWorker implements Worker {
                                   final Object arg,
                                   final Exception e) {
         eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
+                                                         jobBroker,
                                                          Optional.ofNullable(actionClass),
                                                          id,
                                                          arg,
