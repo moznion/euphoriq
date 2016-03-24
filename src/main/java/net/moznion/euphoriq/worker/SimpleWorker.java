@@ -99,7 +99,7 @@ public class SimpleWorker implements Worker {
                 final Job job = e.getJob();
                 final Object arg = job.getArg();
                 final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
-                handleCanceledEvent(actionClass, job.getId(), arg);
+                handleCanceledEvent(actionClass, job.getId(), arg, job.getQueueName());
                 continue;
             }
 
@@ -117,9 +117,10 @@ public class SimpleWorker implements Worker {
             final Job job = maybeJob.get();
             final long id = job.getId();
             final Object arg = job.getArg();
+            final String queueName = job.getQueueName();
             final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
             if (actionClass == null) {
-                handleErrorEvent(actionClass, id, arg, new ActionNotFoundException());
+                handleErrorEvent(actionClass, id, arg, queueName, new ActionNotFoundException());
                 continue;
             }
 
@@ -127,72 +128,88 @@ public class SimpleWorker implements Worker {
             try {
                 action = actionClass.newInstance();
             } catch (InstantiationException | IllegalAccessException e) {
-                handleErrorEvent(actionClass, id, arg, e);
+                handleErrorEvent(actionClass, id, arg, queueName, e);
                 continue;
             }
             action.setArg(arg);
 
-            handleStartedEvent(actionClass, id, arg);
+            handleStartedEvent(actionClass, id, arg, queueName);
 
             try {
                 action.run();
             } catch (RuntimeException e) {
-                handleFailedEvent(actionClass, id, arg, e);
+                handleFailedEvent(actionClass, id, arg, queueName, e);
                 continue;
             }
 
-            handleFinishedEvent(actionClass, id, arg);
+            handleFinishedEvent(actionClass, id, arg, queueName);
         }
     }
 
-    private void handleStartedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
+    private void handleStartedEvent(final Class<? extends Action<?>> actionClass,
+                                    final long id,
+                                    final Object arg,
+                                    final String queueName) {
         eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
                                                            jobBroker,
                                                            Optional.of(actionClass),
                                                            id,
                                                            arg,
+                                                           queueName,
                                                            Optional.empty()));
     }
 
     private void handleFailedEvent(final Class<? extends Action<?>> actionClass,
                                    final long id,
                                    final Object arg,
+                                   final String queueName,
                                    final RuntimeException e) {
         eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
                                                           jobBroker,
                                                           Optional.of(actionClass),
                                                           id,
                                                           arg,
+                                                          queueName,
                                                           Optional.of(e)));
     }
 
-    private void handleFinishedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
+    private void handleFinishedEvent(final Class<? extends Action<?>> actionClass,
+                                     final long id,
+                                     final Object arg,
+                                     final String queueName) {
         eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
                                                             jobBroker,
                                                             Optional.of(actionClass),
                                                             id,
                                                             arg,
+                                                            queueName,
                                                             Optional.empty()));
     }
 
-    private void handleCanceledEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
+    private void handleCanceledEvent(final Class<? extends Action<?>> actionClass,
+                                     final long id,
+                                     final Object arg,
+                                     final String queueName) {
         eventHandlerMap.get(CANCELED).forEach(h -> h.handle(this,
                                                             jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
                                                             arg,
+                                                            queueName,
                                                             Optional.empty()));
     }
 
     private void handleErrorEvent(final Class<? extends Action<?>> actionClass,
                                   final long id,
                                   final Object arg,
+                                  final String queueName,
                                   final Exception e) {
         eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
                                                          jobBroker,
                                                          Optional.ofNullable(actionClass),
                                                          id,
                                                          arg,
+                                                         queueName,
                                                          Optional.of(e)));
     }
 }

@@ -12,5 +12,6 @@ public interface EventHandler {
                 Optional<Class<? extends Action<?>>> actionClass,
                 long id,
                 Object argument,
+                String queueName,
                 Optional<Throwable> throwable);
 }
