@@ -1,10 +1,11 @@
 package net.moznion.euphoriq.worker;
 
-import static net.moznion.euphoriq.worker.Event.CANCELED;
-import static net.moznion.euphoriq.worker.Event.ERROR;
-import static net.moznion.euphoriq.worker.Event.FAILED;
-import static net.moznion.euphoriq.worker.Event.FINISHED;
-import static net.moznion.euphoriq.worker.Event.STARTED;
+import lombok.extern.slf4j.Slf4j;
+import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.exception.ActionNotFoundException;
+import net.moznion.euphoriq.exception.JobCanceledException;
+import net.moznion.euphoriq.jobbroker.JobBroker;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,13 +13,11 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.Job;
-import net.moznion.euphoriq.exception.ActionNotFoundException;
-import net.moznion.euphoriq.exception.JobCanceledException;
-import net.moznion.euphoriq.jobbroker.JobBroker;
-
-import lombok.extern.slf4j.Slf4j;
+import static net.moznion.euphoriq.worker.Event.CANCELED;
+import static net.moznion.euphoriq.worker.Event.ERROR;
+import static net.moznion.euphoriq.worker.Event.FAILED;
+import static net.moznion.euphoriq.worker.Event.FINISHED;
+import static net.moznion.euphoriq.worker.Event.STARTED;
 
 @Slf4j
 public class DefaultWorker implements Worker {
@@ -97,9 +96,10 @@ public class DefaultWorker implements Worker {
             try {
                 maybeJob = jobBroker.dequeue();
             } catch (JobCanceledException e) {
-                final Object arg = e.getJob().getArg();
+                final Job job = e.getJob();
+                final Object arg = job.getArg();
                 final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
-                handleCanceledEvent(actionClass, arg);
+                handleCanceledEvent(actionClass, job.getId(), arg);
                 continue;
             }
 
@@ -114,10 +114,12 @@ public class DefaultWorker implements Worker {
                 continue;
             }
 
-            final Object arg = maybeJob.get().getArg();
+            final Job job = maybeJob.get();
+            final long id = job.getId();
+            final Object arg = job.getArg();
             final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
             if (actionClass == null) {
-                handleErrorEvent(actionClass, arg, new ActionNotFoundException());
+                handleErrorEvent(actionClass, id, arg, new ActionNotFoundException());
                 continue;
             }
 
@@ -125,59 +127,66 @@ public class DefaultWorker implements Worker {
             try {
                 action = actionClass.newInstance();
             } catch (InstantiationException | IllegalAccessException e) {
-                handleErrorEvent(actionClass, arg, e);
+                handleErrorEvent(actionClass, id, arg, e);
                 continue;
             }
             action.setArg(arg);
 
-            handleStartedEvent(actionClass, arg);
+            handleStartedEvent(actionClass, id, arg);
 
             try {
                 action.run();
             } catch (RuntimeException e) {
-                handleFailedEvent(actionClass, arg, e);
+                handleFailedEvent(actionClass, id, arg, e);
                 continue;
             }
 
-            handleFinishedEvent(actionClass, arg);
+            handleFinishedEvent(actionClass, id, arg);
         }
     }
 
-    private void handleStartedEvent(final Class<? extends Action<?>> actionClass, final Object arg) {
+    private void handleStartedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
                                                            Optional.of(actionClass),
+                                                           id,
                                                            arg,
                                                            Optional.empty()));
     }
 
     private void handleFailedEvent(final Class<? extends Action<?>> actionClass,
+                                   final long id,
                                    final Object arg,
                                    final RuntimeException e) {
         eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
                                                           Optional.of(actionClass),
+                                                          id,
                                                           arg,
                                                           Optional.of(e)));
     }
 
-    private void handleFinishedEvent(final Class<? extends Action<?>> actionClass, final Object arg) {
+    private void handleFinishedEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
                                                             Optional.of(actionClass),
+                                                            id,
                                                             arg,
                                                             Optional.empty()));
     }
 
-    private void handleCanceledEvent(final Class<? extends Action<?>> actionClass, final Object arg) {
+    private void handleCanceledEvent(final Class<? extends Action<?>> actionClass, final long id, final Object arg) {
         eventHandlerMap.get(CANCELED).forEach(h -> h.handle(this,
                                                             Optional.ofNullable(actionClass),
+                                                            id,
                                                             arg,
                                                             Optional.empty()));
     }
 
     private void handleErrorEvent(final Class<? extends Action<?>> actionClass,
+                                  final long id,
                                   final Object arg,
                                   final Exception e) {
         eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
                                                          Optional.ofNullable(actionClass),
+                                                         id,
                                                          arg,
                                                          Optional.of(e)));
     }

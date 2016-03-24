@@ -1,5 +1,19 @@
 package net.moznion.euphoriq.jobbroker;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.exception.JobCanceledException;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,22 +23,6 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import net.moznion.euphoriq.Job;
-import net.moznion.euphoriq.exception.JobCanceledException;
-
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
 
 @Slf4j
 public class RedisJobBroker implements JobBroker {
@@ -69,7 +67,7 @@ public class RedisJobBroker implements JobBroker {
         try (final Jedis jedis = jedisPool.getResource()) {
             final Long id = jedis.incr(getIdPodKey());
             jedis.lpush(getQueueKey(queueName),
-                        mapper.writeValueAsString(new Payload(id, arg.getClass(), arg)));
+                    mapper.writeValueAsString(new Payload(id, arg.getClass(), arg)));
             return id;
         } catch (JsonProcessingException e) {
             // TODO

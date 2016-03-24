@@ -32,7 +32,7 @@ public class DefaultWorkerPool implements Worker {
         threadFactory = Executors.defaultThreadFactory();
         workerThreadMap = new ConcurrentHashMap<>(workerNum);
 
-        workerNumAdjuster = (worker, clazz, arg, throwable) -> adjustWorkerNum();
+        workerNumAdjuster = (worker, clazz, id, arg, throwable) -> adjustWorkerNum();
         eventHandlerMap = initializeEventHandlerMap();
 
         for (int i = 0; i < workerNum; i++) {
