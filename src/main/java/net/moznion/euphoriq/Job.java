@@ -8,4 +8,5 @@ import lombok.Data;
 public class Job {
     private long id;
     private Object arg;
+    private String queueName;
 }
