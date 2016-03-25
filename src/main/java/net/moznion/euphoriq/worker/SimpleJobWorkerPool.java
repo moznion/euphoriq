@@ -1,6 +1,8 @@
 package net.moznion.euphoriq.worker;
 
-import static net.moznion.euphoriq.worker.Event.FAILED;
+import lombok.extern.slf4j.Slf4j;
+import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.worker.factory.JobWorkerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,23 +14,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.worker.factory.WorkerFactory;
-
-import lombok.extern.slf4j.Slf4j;
+import static net.moznion.euphoriq.worker.Event.FAILED;
 
 @Slf4j
 public class SimpleJobWorkerPool implements JobWorker {
-    private final WorkerFactory workerFactory;
+    private final JobWorkerFactory jobWorkerFactory;
     private final ThreadFactory threadFactory;
     private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
     private final int workerNum;
     private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
     private final EventHandler workerNumAdjuster;
 
-    public SimpleJobWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
+    public SimpleJobWorkerPool(final JobWorkerFactory jobWorkerFactory, final int workerNum) {
         this.workerNum = workerNum;
-        this.workerFactory = workerFactory;
+        this.jobWorkerFactory = jobWorkerFactory;
         threadFactory = Executors.defaultThreadFactory();
         workerThreadMap = new ConcurrentHashMap<>(workerNum);
 
@@ -109,7 +108,7 @@ public class SimpleJobWorkerPool implements JobWorker {
     }
 
     private void spawnWorker() {
-        final JobWorker worker = workerFactory.createWorker();
+        final JobWorker worker = jobWorkerFactory.createWorker();
 
         for (Entry<Event, List<EventHandler>> entry : eventHandlerMap.entrySet()) {
             final Event event = entry.getKey();

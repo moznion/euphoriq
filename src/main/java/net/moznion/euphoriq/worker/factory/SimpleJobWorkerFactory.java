@@ -4,10 +4,10 @@ import net.moznion.euphoriq.jobbroker.JobBroker;
 import net.moznion.euphoriq.worker.SimpleJobWorker;
 import net.moznion.euphoriq.worker.JobWorker;
 
-public class SimpleWorkerFactory implements WorkerFactory {
+public class SimpleJobWorkerFactory implements JobWorkerFactory {
     private final JobBroker jobBroker;
 
-    public SimpleWorkerFactory(final JobBroker jobBroker) {
+    public SimpleJobWorkerFactory(final JobBroker jobBroker) {
         this.jobBroker = jobBroker;
     }
 
