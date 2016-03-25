@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import net.moznion.euphoriq.jobbroker.JobBroker;
 
-public class SimpleRetryWorker implements RetryWorker {
+public class SimpleRetryWorker implements Worker {
     private static final int DEFAULT_INTERVAL = 10000; // 10 sec
 
     private final JobBroker jobBroker;
@@ -24,8 +24,12 @@ public class SimpleRetryWorker implements RetryWorker {
     }
 
     @Override
-    public void poll() {
+    public void run() {
         threadRef.set(Thread.currentThread());
+        poll();
+    }
+
+    private void poll() {
         while (!isShuttingDown) {
             jobBroker.retry();
             try {

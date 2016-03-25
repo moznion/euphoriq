@@ -2,11 +2,7 @@ package net.moznion.euphoriq.worker;
 
 import net.moznion.euphoriq.Action;
 
-public interface JobWorker extends Runnable {
-    void join() throws InterruptedException;
-
-    void shutdown(boolean immediately);
-
+public interface JobWorker extends Worker {
     // TODO rename
     <T> void setActionMapping(Class<T> argumentClass, Class<? extends Action<T>> actionClass);
 
