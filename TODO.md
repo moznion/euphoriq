@@ -1,14 +1,14 @@
 - [x] Multi Queue Support (on redis)
-- [] Retrying support
-- [] Strictly exceptional handling
+- [ ] Retrying support
+- [ ] Strictly exceptional handling
 - [x] Support worker factory
-- [] Client support
+- [ ] Client support
 - [x] Worker size adjustment by pool
-- [] MySQL broker
-- [] Testing support
-- [] DI support (Guice?)
-- [] Delayed task
-- [] Scheduled task
-- [] Batch
-- [] Use immutables?
+- [ ] MySQL broker
+- [ ] Testing support
+- [ ] DI support (Guice?)
+- [ ] Delayed task
+- [ ] Scheduled task
+- [ ] Batch
+- [ ] Use immutables?
 

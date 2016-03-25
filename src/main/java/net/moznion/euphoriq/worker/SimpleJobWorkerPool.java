@@ -1,6 +1,9 @@
 package net.moznion.euphoriq.worker;
 
-import static net.moznion.euphoriq.worker.Event.FAILED;
+import javafx.util.Pair;
+import lombok.extern.slf4j.Slf4j;
+import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.worker.factory.WorkerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,32 +11,33 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.worker.factory.WorkerFactory;
-
-import lombok.extern.slf4j.Slf4j;
+import static net.moznion.euphoriq.worker.Event.FAILED;
 
 @Slf4j
-public class SimpleWorkerPool implements Worker {
-    private final WorkerFactory workerFactory;
-    private final ThreadFactory threadFactory;
-    private final ConcurrentHashMap<Worker, Thread> workerThreadMap;
+public class SimpleJobWorkerPool implements JobWorker {
     private final int workerNum;
+    private final WorkerFactory<JobWorker> jobWorkerFactory;
+    private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
     private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
-    private final EventHandler workerNumAdjuster;
+    private final Optional<Pair<Worker, Thread>> retryWorkerThreadTuple;
 
-    public SimpleWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
+    private final ThreadFactory threadFactory = Executors.defaultThreadFactory();
+    private final EventHandler workerNumAdjuster =
+            (worker, jobBroker, clazz, id, arg, queueName, throwable) -> adjustWorkerNum();
+
+    public SimpleJobWorkerPool(final WorkerFactory<JobWorker> jobWorkerFactory,
+                               final int workerNum,
+                               final Optional<WorkerFactory<Worker>> maybeRetryWorkerFactory) {
         this.workerNum = workerNum;
-        this.workerFactory = workerFactory;
-        threadFactory = Executors.defaultThreadFactory();
+        this.jobWorkerFactory = jobWorkerFactory;
         workerThreadMap = new ConcurrentHashMap<>(workerNum);
-
-        workerNumAdjuster = (worker, clazz, id, arg, throwable) -> adjustWorkerNum();
         eventHandlerMap = initializeEventHandlerMap();
+        retryWorkerThreadTuple = initializeRetryWorkerThreadTuple(maybeRetryWorkerFactory);
 
         for (int i = 0; i < workerNum; i++) {
             spawnWorker();
@@ -44,29 +48,36 @@ public class SimpleWorkerPool implements Worker {
     public <T> void setActionMapping(final Class<T> argumentClass,
                                      final Class<? extends Action<T>> actionClass) {
         Collections.list(workerThreadMap.keys())
-                   .parallelStream()
-                   .forEach(w -> w.setActionMapping(argumentClass, actionClass));
+                .parallelStream()
+                .forEach(w -> w.setActionMapping(argumentClass, actionClass));
     }
 
     @Override
     public void run() {
         workerThreadMap.values().forEach(Thread::start);
+        retryWorkerThreadTuple.ifPresent(pair -> pair.getValue().start());
         Thread.yield();
     }
 
     @Override
     public void join() throws InterruptedException {
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().join();
+        }
+        if (retryWorkerThreadTuple.isPresent()) {
+            retryWorkerThreadTuple.get().getKey().join();
         }
     }
 
     @Override
     public void shutdown(final boolean immediately) {
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().shutdown(immediately);
+        }
+        if (retryWorkerThreadTuple.isPresent()) {
+            retryWorkerThreadTuple.get().getKey().shutdown(immediately);
         }
     }
 
@@ -75,8 +86,8 @@ public class SimpleWorkerPool implements Worker {
         eventHandlerMap.get(event).add(handler);
 
         Collections.list(workerThreadMap.keys())
-                   .parallelStream()
-                   .forEach(w -> w.addEventHandler(event, handler));
+                .parallelStream()
+                .forEach(w -> w.addEventHandler(event, handler));
     }
 
     @Override
@@ -87,11 +98,11 @@ public class SimpleWorkerPool implements Worker {
         eventHandlerMap.put(event, newHandlers);
 
         Collections.list(workerThreadMap.keys())
-                   .parallelStream()
-                   .forEach(w -> {
-                       w.clearEventHandler(event);
-                       newHandlers.forEach(h -> w.addEventHandler(event, h));
-                   });
+                .parallelStream()
+                .forEach(w -> {
+                    w.clearEventHandler(event);
+                    newHandlers.forEach(h -> w.addEventHandler(event, h));
+                });
     }
 
     @Override
@@ -101,15 +112,15 @@ public class SimpleWorkerPool implements Worker {
         eventHandlerMap.put(event, newHandlers);
 
         Collections.list(workerThreadMap.keys())
-                   .parallelStream()
-                   .forEach(w -> {
-                       w.clearEventHandler(event);
-                       newHandlers.forEach(h -> w.addEventHandler(event, h));
-                   });
+                .parallelStream()
+                .forEach(w -> {
+                    w.clearEventHandler(event);
+                    newHandlers.forEach(h -> w.addEventHandler(event, h));
+                });
     }
 
     private void spawnWorker() {
-        final Worker worker = workerFactory.createWorker();
+        final JobWorker worker = jobWorkerFactory.createWorker();
 
         for (Entry<Event, List<EventHandler>> entry : eventHandlerMap.entrySet()) {
             final Event event = entry.getKey();
@@ -131,6 +142,16 @@ public class SimpleWorkerPool implements Worker {
         eventHandlerMap.put(FAILED, getInitialFailedEventHandlers());
 
         return eventHandlerMap;
+    }
+
+    private Optional<Pair<Worker, Thread>> initializeRetryWorkerThreadTuple(
+            final Optional<WorkerFactory<Worker>> maybeRetryWorkerFactory) {
+        if (maybeRetryWorkerFactory.isPresent()) {
+            final Worker w = maybeRetryWorkerFactory.get().createWorker();
+            Thread t = threadFactory.newThread(w);
+            return Optional.of(new Pair<>(w, t));
+        }
+        return Optional.empty();
     }
 
     private List<EventHandler> getInitialFailedEventHandlers() {
@@ -160,7 +181,7 @@ public class SimpleWorkerPool implements Worker {
         }
 
         final int diff = activeWorkersNum - workerNum;
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
 
         for (int i = 0; i < diff; i++) {
             if (!workers.hasMoreElements()) {
@@ -168,7 +189,7 @@ public class SimpleWorkerPool implements Worker {
                 break;
             }
 
-            final Worker worker = workers.nextElement();
+            final JobWorker worker = workers.nextElement();
             worker.shutdown(false);
             try {
                 worker.join();

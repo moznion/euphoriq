@@ -15,12 +15,14 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,9 +41,10 @@ public class RedisJobBroker implements JobBroker {
     public RedisJobBroker(final String namespace,
                           final Map<String, Integer> queuesWithWeight,
                           final String redisHost,
-                          final int redisPort) {
+                          final int redisPort,
+                          final int redisConnectionNum) {
         final JedisPoolConfig poolConfig = new JedisPoolConfig();
-        poolConfig.setMaxTotal(50); // TODO: configurable
+        poolConfig.setMaxTotal(redisConnectionNum);
 
         jedisPool = new JedisPool(poolConfig, redisHost, redisPort); // TODO: timeout, password
         mapper = new ObjectMapper();
@@ -66,27 +69,23 @@ public class RedisJobBroker implements JobBroker {
 
         try (final Jedis jedis = jedisPool.getResource()) {
             final Long id = jedis.incr(getIdPodKey());
-            jedis.lpush(getQueueKey(queueName),
-                    mapper.writeValueAsString(new Payload(id, arg.getClass(), arg)));
+            enqueue(jedis, new JobPayload(id, arg.getClass(), arg, queueName));
             return id;
-        } catch (JsonProcessingException e) {
-            // TODO
-            throw new RuntimeException(e);
         }
     }
 
     @Override
     public Optional<Job> dequeue() throws JobCanceledException {
         try (final Jedis jedis = jedisPool.getResource()) {
-            final Optional<String> maybeJobString = pickupJobString(jedis);
-            if (!maybeJobString.isPresent()) {
+            final Optional<String> maybeSerializedJobPayload = pickupSerializedPayload(jedis);
+            if (!maybeSerializedJobPayload.isPresent()) {
                 return Optional.empty();
             }
 
-            final Payload payload = mapper.readValue(maybeJobString.get(), Payload.class);
-            final long id = payload.getId();
+            final JobPayload jobPayload = mapper.readValue(maybeSerializedJobPayload.get(), JobPayload.class);
+            final long id = jobPayload.getId();
 
-            final Job job = new Job(id, mapper.convertValue(payload.arg, payload.argumentClass));
+            final Job job = new Job(id, mapper.convertValue(jobPayload.arg, jobPayload.argumentClass), jobPayload.getQueueName());
 
             if (isCanceledJob(jedis, id)) {
                 throw new JobCanceledException(job);
@@ -112,13 +111,66 @@ public class RedisJobBroker implements JobBroker {
         }
     }
 
-    private Optional<String> pickupJobString(final Jedis jedis) {
+    @Override
+    public void retry() {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0, Instant.now().getEpochSecond());
+            for (final String serializedRetryJobPayload : serializedRetryJobPayloads) {
+                try {
+                    final JobPayload jobPayload = mapper.readValue(serializedRetryJobPayload, JobPayload.class);
+                    enqueue(jedis, jobPayload);
+                } catch (IOException e) {
+                    // TODO
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean registerRetryJob(final long id, final String queueName, final Object arg) {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            long failedCount = 1;
+            final String fetched = jedis.hget(getFailedCountKey(), String.valueOf(id));
+            if (fetched != null) {
+                failedCount = Long.parseLong(fetched, 10);
+            }
+
+            if (failedCount > 25) {
+                // TODO go to morgue
+                return false;
+            }
+
+            final double delay = Math.pow(failedCount, 4) + 15
+                    + (new Random(Instant.now().getEpochSecond()).nextInt(30) * (failedCount + 1));
+
+            final String serializedPayload = mapper.writeValueAsString(new JobPayload(id, arg.getClass(), arg, queueName));
+            jedis.hincrBy(getFailedCountKey(), String.valueOf(id), 1);
+            jedis.zadd(getFailedKey(), Instant.now().getEpochSecond() + delay, serializedPayload);
+        } catch (JsonProcessingException e) {
+            // TODO
+            throw new RuntimeException();
+        }
+        return true;
+    }
+
+    private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
+        final String serializedRetryJobPayload;
+        try {
+            serializedRetryJobPayload = mapper.writeValueAsString(jobPayload);
+            jedis.lpush(getQueueKey(jobPayload.getQueueName()), serializedRetryJobPayload);
+        } catch (JsonProcessingException e) {
+            /// TODO
+            e.printStackTrace();
+        }
+    }
+
+    private Optional<String> pickupSerializedPayload(final Jedis jedis) {
         int currentCursor = cursor.get();
 
         for (int cnt = queuesSize; cnt > 0; cnt--) {
             final int index = currentCursor - 1;
-            log.info("Q: {}", queues.get(index));
-            String job = jedis.rpop(getQueueKey(queues.get(index))); // TODO: care runtime exception
+            final String job = jedis.rpop(getQueueKey(queues.get(index))); // TODO: care runtime exception
             if (job != null) {
                 incrementCursor(currentCursor);
                 return Optional.of(job);
@@ -173,12 +225,21 @@ public class RedisJobBroker implements JobBroker {
         return namespace + "|canceled";
     }
 
+    private String getFailedCountKey() {
+        return namespace + "|failed_count";
+    }
+
+    private String getFailedKey() {
+        return namespace + "|failed";
+    }
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
-    private static class Payload {
+    private static class JobPayload {
         private long id;
         private Class<?> argumentClass;
         private Object arg;
+        private String queueName;
     }
 }
