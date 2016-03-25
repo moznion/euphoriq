@@ -1,8 +1,8 @@
 package net.moznion.euphoriq.worker.factory;
 
 import net.moznion.euphoriq.jobbroker.JobBroker;
-import net.moznion.euphoriq.worker.SimpleWorker;
-import net.moznion.euphoriq.worker.Worker;
+import net.moznion.euphoriq.worker.SimpleJobWorker;
+import net.moznion.euphoriq.worker.JobWorker;
 
 public class SimpleWorkerFactory implements WorkerFactory {
     private final JobBroker jobBroker;
@@ -12,7 +12,7 @@ public class SimpleWorkerFactory implements WorkerFactory {
     }
 
     @Override
-    public Worker createWorker() {
-        return new SimpleWorker(jobBroker);
+    public JobWorker createWorker() {
+        return new SimpleJobWorker(jobBroker);
     }
 }

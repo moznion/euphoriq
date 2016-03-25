@@ -18,15 +18,15 @@ import net.moznion.euphoriq.worker.factory.WorkerFactory;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class SimpleWorkerPool implements Worker {
+public class SimpleJobWorkerPool implements JobWorker {
     private final WorkerFactory workerFactory;
     private final ThreadFactory threadFactory;
-    private final ConcurrentHashMap<Worker, Thread> workerThreadMap;
+    private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
     private final int workerNum;
     private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
     private final EventHandler workerNumAdjuster;
 
-    public SimpleWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
+    public SimpleJobWorkerPool(final WorkerFactory workerFactory, final int workerNum) {
         this.workerNum = workerNum;
         this.workerFactory = workerFactory;
         threadFactory = Executors.defaultThreadFactory();
@@ -56,7 +56,7 @@ public class SimpleWorkerPool implements Worker {
 
     @Override
     public void join() throws InterruptedException {
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().join();
         }
@@ -64,7 +64,7 @@ public class SimpleWorkerPool implements Worker {
 
     @Override
     public void shutdown(final boolean immediately) {
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().shutdown(immediately);
         }
@@ -109,7 +109,7 @@ public class SimpleWorkerPool implements Worker {
     }
 
     private void spawnWorker() {
-        final Worker worker = workerFactory.createWorker();
+        final JobWorker worker = workerFactory.createWorker();
 
         for (Entry<Event, List<EventHandler>> entry : eventHandlerMap.entrySet()) {
             final Event event = entry.getKey();
@@ -160,7 +160,7 @@ public class SimpleWorkerPool implements Worker {
         }
 
         final int diff = activeWorkersNum - workerNum;
-        final Enumeration<Worker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker> workers = workerThreadMap.keys();
 
         for (int i = 0; i < diff; i++) {
             if (!workers.hasMoreElements()) {
@@ -168,7 +168,7 @@ public class SimpleWorkerPool implements Worker {
                 break;
             }
 
-            final Worker worker = workers.nextElement();
+            final JobWorker worker = workers.nextElement();
             worker.shutdown(false);
             try {
                 worker.join();

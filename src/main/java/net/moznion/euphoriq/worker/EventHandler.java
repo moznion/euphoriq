@@ -7,7 +7,7 @@ import java.util.Optional;
 
 @FunctionalInterface
 public interface EventHandler {
-    void handle(Worker worker,
+    void handle(JobWorker worker,
                 JobBroker jobBroker,
                 Optional<Class<? extends Action<?>>> actionClass,
                 long id,

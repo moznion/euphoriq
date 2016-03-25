@@ -2,7 +2,7 @@ package net.moznion.euphoriq.worker;
 
 import net.moznion.euphoriq.Action;
 
-public interface Worker extends Runnable {
+public interface JobWorker extends Runnable {
     void join() throws InterruptedException;
 
     void shutdown(boolean immediately);
