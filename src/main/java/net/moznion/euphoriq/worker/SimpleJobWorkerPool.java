@@ -18,20 +18,19 @@ import static net.moznion.euphoriq.worker.Event.FAILED;
 
 @Slf4j
 public class SimpleJobWorkerPool implements JobWorker {
-    private final JobWorkerFactory jobWorkerFactory;
-    private final ThreadFactory threadFactory;
-    private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
     private final int workerNum;
+    private final JobWorkerFactory jobWorkerFactory;
+    private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
     private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
-    private final EventHandler workerNumAdjuster;
+
+    private final ThreadFactory threadFactory = Executors.defaultThreadFactory();
+    private final EventHandler workerNumAdjuster =
+            (worker, jobBroker, clazz, id, arg, queueName, throwable) -> adjustWorkerNum();
 
     public SimpleJobWorkerPool(final JobWorkerFactory jobWorkerFactory, final int workerNum) {
         this.workerNum = workerNum;
         this.jobWorkerFactory = jobWorkerFactory;
-        threadFactory = Executors.defaultThreadFactory();
         workerThreadMap = new ConcurrentHashMap<>(workerNum);
-
-        workerNumAdjuster = (worker, jobBroker, clazz, id, arg, queueName, throwable) -> adjustWorkerNum();
         eventHandlerMap = initializeEventHandlerMap();
 
         for (int i = 0; i < workerNum; i++) {
