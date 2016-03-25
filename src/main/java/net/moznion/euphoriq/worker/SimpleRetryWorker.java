@@ -5,20 +5,20 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.moznion.euphoriq.jobbroker.JobBroker;
 
 public class SimpleRetryWorker implements Worker {
-    private static final int DEFAULT_INTERVAL = 10000; // 10 sec
+    private static final int DEFAULT_INTERVAL_MILLIS = 10000; // 10 sec
 
     private final JobBroker jobBroker;
-    private final int interval;
+    private final int intervalMillis;
     private final AtomicReference<Thread> threadRef;
     private boolean isShuttingDown;
 
     public SimpleRetryWorker(final JobBroker jobBroker) {
-        this(jobBroker, DEFAULT_INTERVAL);
+        this(jobBroker, DEFAULT_INTERVAL_MILLIS);
     }
 
-    public SimpleRetryWorker(final JobBroker jobBroker, final int interval) {
+    public SimpleRetryWorker(final JobBroker jobBroker, final int intervalMillis) {
         this.jobBroker = jobBroker;
-        this.interval = interval;
+        this.intervalMillis = intervalMillis;
         isShuttingDown = false;
         threadRef = new AtomicReference<>(null);
     }
@@ -33,7 +33,7 @@ public class SimpleRetryWorker implements Worker {
         while (!isShuttingDown) {
             jobBroker.retry();
             try {
-                Thread.sleep(interval);
+                Thread.sleep(intervalMillis);
             } catch (InterruptedException e) {
                 // TODO log?
                 continue;
