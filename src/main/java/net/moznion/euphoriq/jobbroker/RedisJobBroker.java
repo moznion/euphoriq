@@ -109,6 +109,20 @@ public class RedisJobBroker implements JobBroker {
         }
     }
 
+    @Override
+    public long incrementFailedCount(final long id) {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            return jedis.incr(getFailedCountKey(id));
+        }
+    }
+
+    @Override
+    public long getFailedCount(final long id) {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            return Long.parseLong(jedis.get(getFailedCountKey(id)), 10);
+        }
+    }
+
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
         final String serializedRetryJobPayload;
         try {
@@ -180,12 +194,8 @@ public class RedisJobBroker implements JobBroker {
         return namespace + "|canceled";
     }
 
-    private String getFailedCountKey() {
-        return namespace + "|failed_count";
-    }
-
-    private String getFailedKey() {
-        return namespace + "|failed";
+    private String getFailedCountKey(final long id) {
+        return namespace + "|failed_count|" + id;
     }
 
     @Data
