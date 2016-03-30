@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -46,7 +47,10 @@ public class RedisJobBroker implements JobBroker {
         poolConfig.setMaxTotal(redisConnectionNum);
 
         jedisPool = new JedisPool(poolConfig, redisHost, redisPort); // TODO: timeout, password
+
         mapper = new ObjectMapper();
+        mapper.registerModule(new Jdk8Module());
+
         this.namespace = namespace;
 
         queues = initializeQueues(queuesWithWeight);
@@ -93,7 +97,10 @@ public class RedisJobBroker implements JobBroker {
             final JobPayload jobPayload = mapper.readValue(maybeSerializedJobPayload.get(), JobPayload.class);
             final long id = jobPayload.getId();
 
-            final Job job = new Job(id, mapper.convertValue(jobPayload.arg, jobPayload.argumentClass), jobPayload.getQueueName());
+            final Job job = new Job(id,
+                    mapper.convertValue(jobPayload.arg, jobPayload.argumentClass),
+                    jobPayload.getQueueName(),
+                    jobPayload.getTimeoutSec());
 
             if (isCanceledJob(jedis, id)) {
                 throw new JobCanceledException(job);
