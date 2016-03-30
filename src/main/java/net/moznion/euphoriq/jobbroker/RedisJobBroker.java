@@ -15,14 +15,12 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -109,49 +107,6 @@ public class RedisJobBroker implements JobBroker {
         try (final Jedis jedis = jedisPool.getResource()) {
             jedis.hset(getCanceledJobKey(), String.valueOf(id), "1");
         }
-    }
-
-    @Override
-    public void retry() {
-        try (final Jedis jedis = jedisPool.getResource()) {
-            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0, Instant.now().getEpochSecond());
-            for (final String serializedRetryJobPayload : serializedRetryJobPayloads) {
-                try {
-                    final JobPayload jobPayload = mapper.readValue(serializedRetryJobPayload, JobPayload.class);
-                    enqueue(jedis, jobPayload);
-                } catch (IOException e) {
-                    // TODO
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    @Override
-    public boolean registerRetryJob(final long id, final String queueName, final Object arg) {
-        try (final Jedis jedis = jedisPool.getResource()) {
-            long failedCount = 1;
-            final String fetched = jedis.hget(getFailedCountKey(), String.valueOf(id));
-            if (fetched != null) {
-                failedCount = Long.parseLong(fetched, 10);
-            }
-
-            if (failedCount > 25) {
-                // TODO go to morgue
-                return false;
-            }
-
-            final double delay = Math.pow(failedCount, 4) + 15
-                    + (new Random(Instant.now().getEpochSecond()).nextInt(30) * (failedCount + 1));
-
-            final String serializedPayload = mapper.writeValueAsString(new JobPayload(id, arg.getClass(), arg, queueName));
-            jedis.hincrBy(getFailedCountKey(), String.valueOf(id), 1);
-            jedis.zadd(getFailedKey(), Instant.now().getEpochSecond() + delay, serializedPayload);
-        } catch (JsonProcessingException e) {
-            // TODO
-            throw new RuntimeException();
-        }
-        return true;
     }
 
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {

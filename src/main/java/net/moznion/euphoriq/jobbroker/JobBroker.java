@@ -11,8 +11,4 @@ public interface JobBroker {
     Optional<Job> dequeue() throws JobCanceledException;
 
     void cancel(long id);
-
-    boolean registerRetryJob(final long id, final String queueName, final Object arg);
-
-    void retry();
 }
