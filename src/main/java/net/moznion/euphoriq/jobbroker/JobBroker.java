@@ -8,6 +8,8 @@ import net.moznion.euphoriq.exception.JobCanceledException;
 public interface JobBroker {
     long enqueue(String queueName, Object arg);
 
+    long enqueue(String queueName, Object arg, int timeoutSec);
+
     Optional<Job> dequeue() throws JobCanceledException;
 
     void cancel(long id);

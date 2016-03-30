@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -60,6 +61,15 @@ public class RedisJobBroker implements JobBroker {
 
     @Override
     public long enqueue(String queueName, Object arg) {
+        return enqueue(queueName, arg, OptionalInt.empty());
+    }
+
+    @Override
+    public long enqueue(String queueName, Object arg, int timeoutSec) {
+        return enqueue(queueName, arg, OptionalInt.of(timeoutSec));
+    }
+
+    private long enqueue(String queueName, Object arg, OptionalInt timeoutSecOptional) {
         if (!queuesBag.contains(queueName)) {
             // TODO
             throw new IllegalArgumentException();
@@ -67,7 +77,7 @@ public class RedisJobBroker implements JobBroker {
 
         try (final Jedis jedis = jedisPool.getResource()) {
             final Long id = jedis.incr(getIdPodKey());
-            enqueue(jedis, new JobPayload(id, arg.getClass(), arg, queueName));
+            enqueue(jedis, new JobPayload(id, arg.getClass(), arg, queueName, timeoutSecOptional));
             return id;
         }
     }
@@ -206,5 +216,6 @@ public class RedisJobBroker implements JobBroker {
         private Class<?> argumentClass;
         private Object arg;
         private String queueName;
+        private OptionalInt timeoutSec;
     }
 }
