@@ -174,7 +174,7 @@ public class RedisJobBroker implements JobBroker {
         return Optional.empty();
     }
 
-    private synchronized void incrementCursor(final int i) {
+    private void incrementCursor(final int i) {
         if (i % queuesSize == 0) {
             cursor.set(1);
         } else {
