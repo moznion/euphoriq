@@ -10,7 +10,14 @@ import net.moznion.euphoriq.jobbroker.JobBroker;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static net.moznion.euphoriq.worker.Event.CANCELED;
@@ -18,6 +25,7 @@ import static net.moznion.euphoriq.worker.Event.ERROR;
 import static net.moznion.euphoriq.worker.Event.FAILED;
 import static net.moznion.euphoriq.worker.Event.FINISHED;
 import static net.moznion.euphoriq.worker.Event.STARTED;
+import static net.moznion.euphoriq.worker.Event.TIMEOUT;
 
 @Slf4j
 public class SimpleJobWorker implements JobWorker {
@@ -92,7 +100,7 @@ public class SimpleJobWorker implements JobWorker {
 
     private void poll() {
         while (!isShuttingDown) {
-            Optional<Job> maybeJob;
+            final Optional<Job> maybeJob;
             try {
                 maybeJob = jobBroker.dequeue();
             } catch (JobCanceledException e) {
@@ -133,13 +141,29 @@ public class SimpleJobWorker implements JobWorker {
             }
             action.setArg(arg);
 
+            final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
             handleStartedEvent(actionClass, id, arg, queueName);
 
+            final Future<?> future = executorService.submit(action);
             try {
-                action.run();
-            } catch (RuntimeException e) {
+                final OptionalInt maybeTimeoutSec = job.getTimeoutSec();
+                if (maybeTimeoutSec.isPresent()) {
+                    future.get(maybeTimeoutSec.getAsInt(), TimeUnit.SECONDS);
+                } else {
+                    future.get();
+                }
+            } catch (InterruptedException e) {
                 handleFailedEvent(actionClass, id, arg, queueName, e);
                 continue;
+            } catch (ExecutionException e) {
+                handleFailedEvent(actionClass, id, arg, queueName, e.getCause());
+                continue;
+            } catch (TimeoutException e) {
+                handleTimeoutEvent(actionClass, id, arg, queueName, e);
+                continue;
+            } finally {
+                executorService.shutdown();
             }
 
             handleFinishedEvent(actionClass, id, arg, queueName);
@@ -152,7 +176,7 @@ public class SimpleJobWorker implements JobWorker {
                                     final String queueName) {
         eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
                                                            jobBroker,
-                                                           Optional.of(actionClass),
+                                                           Optional.ofNullable(actionClass),
                                                            id,
                                                            arg,
                                                            queueName,
@@ -163,10 +187,10 @@ public class SimpleJobWorker implements JobWorker {
                                    final long id,
                                    final Object arg,
                                    final String queueName,
-                                   final RuntimeException e) {
+                                   final Throwable e) {
         eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
                                                           jobBroker,
-                                                          Optional.of(actionClass),
+                                                          Optional.ofNullable(actionClass),
                                                           id,
                                                           arg,
                                                           queueName,
@@ -179,7 +203,7 @@ public class SimpleJobWorker implements JobWorker {
                                      final String queueName) {
         eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
                                                             jobBroker,
-                                                            Optional.of(actionClass),
+                                                            Optional.ofNullable(actionClass),
                                                             id,
                                                             arg,
                                                             queueName,
@@ -203,7 +227,7 @@ public class SimpleJobWorker implements JobWorker {
                                   final long id,
                                   final Object arg,
                                   final String queueName,
-                                  final Exception e) {
+                                  final Throwable e) {
         eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
                                                          jobBroker,
                                                          Optional.ofNullable(actionClass),
@@ -211,5 +235,19 @@ public class SimpleJobWorker implements JobWorker {
                                                          arg,
                                                          queueName,
                                                          Optional.of(e)));
+    }
+
+    private void handleTimeoutEvent(final Class<? extends Action<?>> actionClass,
+                                  final long id,
+                                  final Object arg,
+                                  final String queueName,
+                                  final Throwable e) {
+        eventHandlerMap.get(TIMEOUT).forEach(h -> h.handle(this,
+                                                           jobBroker,
+                                                           Optional.ofNullable(actionClass),
+                                                           id,
+                                                           arg,
+                                                           queueName,
+                                                           Optional.of(e)));
     }
 }
