@@ -16,6 +16,7 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -140,6 +141,39 @@ public class RedisJobBroker implements JobBroker {
         }
     }
 
+    @Override
+    public void retry() {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0, Instant.now().getEpochSecond());
+            for (final String serializedRetryJobPayload : serializedRetryJobPayloads) {
+                try {
+                    final JobPayload jobPayload = mapper.readValue(serializedRetryJobPayload, JobPayload.class);
+                    enqueue(jedis, jobPayload);
+                } catch (IOException e) {
+                    // TODO
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean registerRetryJob(final long id,
+                                    final String queueName,
+                                    final Object arg,
+                                    final OptionalInt timeoutSec,
+                                    final int delay) {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            final JobPayload jobPayload = new JobPayload(id, arg.getClass(), arg, queueName, timeoutSec);
+            final String serializedPayload = mapper.writeValueAsString(jobPayload);
+            jedis.zadd(getFailedKey(), Instant.now().getEpochSecond() + delay, serializedPayload);
+        } catch (JsonProcessingException e) {
+            // TODO
+            throw new RuntimeException();
+        }
+        return true;
+    }
+
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
         final String serializedRetryJobPayload;
         try {
@@ -213,6 +247,10 @@ public class RedisJobBroker implements JobBroker {
 
     private String getFailedCountKey(final long id) {
         return namespace + "|failed_count|" + id;
+    }
+
+    private String getFailedKey() {
+        return namespace + "|failed";
     }
 
     @Data
