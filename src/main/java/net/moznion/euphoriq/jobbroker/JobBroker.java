@@ -25,5 +25,5 @@ public interface JobBroker {
                              final String queueName,
                              final Object arg,
                              final OptionalInt timeoutSec,
-                             final int delay);
+                             final double delay);
 }

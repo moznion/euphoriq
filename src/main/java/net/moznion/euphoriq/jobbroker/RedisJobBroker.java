@@ -137,7 +137,11 @@ public class RedisJobBroker implements JobBroker {
     @Override
     public long getFailedCount(final long id) {
         try (final Jedis jedis = jedisPool.getResource()) {
-            return Long.parseLong(jedis.get(getFailedCountKey(id)), 10);
+            final String fetched = jedis.get(getFailedCountKey(id));
+            if (fetched == null) {
+                return 0L;
+            }
+            return Long.parseLong(fetched, 10);
         }
     }
 
@@ -162,7 +166,7 @@ public class RedisJobBroker implements JobBroker {
                                     final String queueName,
                                     final Object arg,
                                     final OptionalInt timeoutSec,
-                                    final int delay) {
+                                    final double delay) {
         try (final Jedis jedis = jedisPool.getResource()) {
             final JobPayload jobPayload = new JobPayload(id, arg.getClass(), arg, queueName, timeoutSec);
             final String serializedPayload = mapper.writeValueAsString(jobPayload);
