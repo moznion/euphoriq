@@ -5,6 +5,7 @@ import net.moznion.euphoriq.jobbroker.JobBroker;
 import net.moznion.euphoriq.worker.JobWorker;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
 @FunctionalInterface
 public interface EventHandler {
@@ -14,5 +15,6 @@ public interface EventHandler {
                 long id,
                 Object argument,
                 String queueName,
+                OptionalInt timeoutSec,
                 Optional<Throwable> throwable);
 }

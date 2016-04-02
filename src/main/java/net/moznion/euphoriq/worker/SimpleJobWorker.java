@@ -109,7 +109,7 @@ public class SimpleJobWorker implements JobWorker {
                 final Job job = e.getJob();
                 final Object arg = job.getArg();
                 final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
-                handleCanceledEvent(actionClass, job.getId(), arg, job.getQueueName());
+                handleCanceledEvent(actionClass, job.getId(), arg, job.getQueueName(), job.getTimeoutSec());
                 continue;
             }
 
@@ -128,9 +128,10 @@ public class SimpleJobWorker implements JobWorker {
             final long id = job.getId();
             final Object arg = job.getArg();
             final String queueName = job.getQueueName();
+            final OptionalInt maybeTimeoutSec = job.getTimeoutSec();
             final Class<? extends Action<?>> actionClass = actionMap.get(arg.getClass());
             if (actionClass == null) {
-                handleErrorEvent(actionClass, id, arg, queueName, new ActionNotFoundException());
+                handleErrorEvent(null, id, arg, queueName, maybeTimeoutSec, new ActionNotFoundException());
                 continue;
             }
 
@@ -138,50 +139,51 @@ public class SimpleJobWorker implements JobWorker {
             try {
                 action = actionClass.newInstance();
             } catch (InstantiationException | IllegalAccessException e) {
-                handleErrorEvent(actionClass, id, arg, queueName, e);
+                handleErrorEvent(actionClass, id, arg, queueName, maybeTimeoutSec, e);
                 continue;
             }
             action.setArg(arg);
 
             final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-            handleStartedEvent(actionClass, id, arg, queueName);
+            handleStartedEvent(actionClass, id, arg, queueName, maybeTimeoutSec);
 
             final Future<?> future = executorService.submit(action);
             try {
-                final OptionalInt maybeTimeoutSec = job.getTimeoutSec();
                 if (maybeTimeoutSec.isPresent()) {
                     future.get(maybeTimeoutSec.getAsInt(), TimeUnit.SECONDS);
                 } else {
                     future.get();
                 }
             } catch (InterruptedException e) {
-                handleFailedEvent(actionClass, id, arg, queueName, e);
+                handleFailedEvent(actionClass, id, arg, queueName, maybeTimeoutSec, e);
                 continue;
             } catch (ExecutionException e) {
-                handleFailedEvent(actionClass, id, arg, queueName, e.getCause());
+                handleFailedEvent(actionClass, id, arg, queueName, maybeTimeoutSec, e.getCause());
                 continue;
             } catch (TimeoutException e) {
-                handleTimeoutEvent(actionClass, id, arg, queueName, e);
+                handleTimeoutEvent(actionClass, id, arg, queueName, maybeTimeoutSec, e);
                 continue;
             } finally {
                 executorService.shutdown();
             }
 
-            handleFinishedEvent(actionClass, id, arg, queueName);
+            handleFinishedEvent(actionClass, id, arg, queueName, maybeTimeoutSec);
         }
     }
 
     private void handleStartedEvent(final Class<? extends Action<?>> actionClass,
                                     final long id,
                                     final Object arg,
-                                    final String queueName) {
+                                    final String queueName,
+                                    final OptionalInt timeoutSec) {
         eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
                                                            jobBroker,
                                                            Optional.ofNullable(actionClass),
                                                            id,
                                                            arg,
                                                            queueName,
+                                                           timeoutSec,
                                                            Optional.empty()));
     }
 
@@ -189,6 +191,7 @@ public class SimpleJobWorker implements JobWorker {
                                    final long id,
                                    final Object arg,
                                    final String queueName,
+                                   final OptionalInt timeoutSec,
                                    final Throwable e) {
         eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
                                                           jobBroker,
@@ -196,32 +199,37 @@ public class SimpleJobWorker implements JobWorker {
                                                           id,
                                                           arg,
                                                           queueName,
+                                                          timeoutSec,
                                                           Optional.of(e)));
     }
 
     private void handleFinishedEvent(final Class<? extends Action<?>> actionClass,
                                      final long id,
                                      final Object arg,
-                                     final String queueName) {
+                                     final String queueName,
+                                     final OptionalInt timeoutSec) {
         eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
                                                             jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
                                                             arg,
                                                             queueName,
+                                                            timeoutSec,
                                                             Optional.empty()));
     }
 
     private void handleCanceledEvent(final Class<? extends Action<?>> actionClass,
                                      final long id,
                                      final Object arg,
-                                     final String queueName) {
+                                     final String queueName,
+                                     final OptionalInt timeoutSec) {
         eventHandlerMap.get(CANCELED).forEach(h -> h.handle(this,
                                                             jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
                                                             arg,
                                                             queueName,
+                                                            timeoutSec,
                                                             Optional.empty()));
     }
 
@@ -229,6 +237,7 @@ public class SimpleJobWorker implements JobWorker {
                                   final long id,
                                   final Object arg,
                                   final String queueName,
+                                  final OptionalInt timeoutSec,
                                   final Throwable e) {
         eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
                                                          jobBroker,
@@ -236,20 +245,23 @@ public class SimpleJobWorker implements JobWorker {
                                                          id,
                                                          arg,
                                                          queueName,
+                                                         timeoutSec,
                                                          Optional.of(e)));
     }
 
     private void handleTimeoutEvent(final Class<? extends Action<?>> actionClass,
-                                  final long id,
-                                  final Object arg,
-                                  final String queueName,
-                                  final Throwable e) {
+                                    final long id,
+                                    final Object arg,
+                                    final String queueName,
+                                    final OptionalInt timeoutSec,
+                                    final Throwable e) {
         eventHandlerMap.get(TIMEOUT).forEach(h -> h.handle(this,
                                                            jobBroker,
                                                            Optional.ofNullable(actionClass),
                                                            id,
                                                            arg,
                                                            queueName,
+                                                           timeoutSec,
                                                            Optional.of(e)));
     }
 }
