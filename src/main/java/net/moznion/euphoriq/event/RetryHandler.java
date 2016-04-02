@@ -11,7 +11,8 @@ import java.util.Random;
 
 public class RetryHandler implements EventHandler {
     @Override
-    public void handle(JobWorker worker,
+    public void handle(Event event,
+                       JobWorker worker,
                        JobBroker jobBroker,
                        Optional<Class<? extends Action<?>>> actionClass,
                        long id,

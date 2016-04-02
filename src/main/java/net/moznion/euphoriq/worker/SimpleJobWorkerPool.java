@@ -30,7 +30,7 @@ public class SimpleJobWorkerPool implements JobWorker {
 
     private final ThreadFactory threadFactory = Executors.defaultThreadFactory();
     private final EventHandler workerNumAdjuster =
-            (worker, jobBroker, clazz, id, arg, queueName, timeoutSec, throwable) -> adjustWorkerNum();
+            (event, worker, jobBroker, clazz, id, arg, queueName, timeoutSec, throwable) -> adjustWorkerNum();
 
     public SimpleJobWorkerPool(final WorkerFactory<JobWorker> jobWorkerFactory,
                                final int workerNum,

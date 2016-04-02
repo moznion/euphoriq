@@ -177,7 +177,8 @@ public class SimpleJobWorker implements JobWorker {
                                     final Object arg,
                                     final String queueName,
                                     final OptionalInt timeoutSec) {
-        eventHandlerMap.get(STARTED).forEach(h -> h.handle(this,
+        eventHandlerMap.get(STARTED).forEach(h -> h.handle(STARTED,
+                                                           this,
                                                            jobBroker,
                                                            Optional.ofNullable(actionClass),
                                                            id,
@@ -193,7 +194,8 @@ public class SimpleJobWorker implements JobWorker {
                                    final String queueName,
                                    final OptionalInt timeoutSec,
                                    final Throwable e) {
-        eventHandlerMap.get(FAILED).forEach(h -> h.handle(this,
+        eventHandlerMap.get(FAILED).forEach(h -> h.handle(FAILED,
+                                                          this,
                                                           jobBroker,
                                                           Optional.ofNullable(actionClass),
                                                           id,
@@ -208,7 +210,8 @@ public class SimpleJobWorker implements JobWorker {
                                      final Object arg,
                                      final String queueName,
                                      final OptionalInt timeoutSec) {
-        eventHandlerMap.get(FINISHED).forEach(h -> h.handle(this,
+        eventHandlerMap.get(FINISHED).forEach(h -> h.handle(FINISHED,
+                                                            this,
                                                             jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
@@ -223,7 +226,8 @@ public class SimpleJobWorker implements JobWorker {
                                      final Object arg,
                                      final String queueName,
                                      final OptionalInt timeoutSec) {
-        eventHandlerMap.get(CANCELED).forEach(h -> h.handle(this,
+        eventHandlerMap.get(CANCELED).forEach(h -> h.handle(CANCELED,
+                                                            this,
                                                             jobBroker,
                                                             Optional.ofNullable(actionClass),
                                                             id,
@@ -239,7 +243,8 @@ public class SimpleJobWorker implements JobWorker {
                                   final String queueName,
                                   final OptionalInt timeoutSec,
                                   final Throwable e) {
-        eventHandlerMap.get(ERROR).forEach(h -> h.handle(this,
+        eventHandlerMap.get(ERROR).forEach(h -> h.handle(ERROR,
+                                                         this,
                                                          jobBroker,
                                                          Optional.ofNullable(actionClass),
                                                          id,
@@ -255,7 +260,8 @@ public class SimpleJobWorker implements JobWorker {
                                     final String queueName,
                                     final OptionalInt timeoutSec,
                                     final Throwable e) {
-        eventHandlerMap.get(TIMEOUT).forEach(h -> h.handle(this,
+        eventHandlerMap.get(TIMEOUT).forEach(h -> h.handle(TIMEOUT,
+                                                           this,
                                                            jobBroker,
                                                            Optional.ofNullable(actionClass),
                                                            id,
