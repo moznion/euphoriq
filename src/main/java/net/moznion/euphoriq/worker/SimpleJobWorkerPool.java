@@ -3,6 +3,8 @@ package net.moznion.euphoriq.worker;
 import javafx.util.Pair;
 import lombok.extern.slf4j.Slf4j;
 import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.event.Event;
+import net.moznion.euphoriq.event.EventHandler;
 import net.moznion.euphoriq.worker.factory.WorkerFactory;
 
 import java.util.ArrayList;
@@ -16,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import static net.moznion.euphoriq.worker.Event.FAILED;
+import static net.moznion.euphoriq.event.Event.FAILED;
 
 @Slf4j
 public class SimpleJobWorkerPool implements JobWorker {

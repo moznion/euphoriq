@@ -1,7 +1,8 @@
-package net.moznion.euphoriq.worker;
+package net.moznion.euphoriq.event;
 
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.jobbroker.JobBroker;
+import net.moznion.euphoriq.worker.JobWorker;
 
 import java.util.Optional;
 

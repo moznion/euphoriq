@@ -3,6 +3,8 @@ package net.moznion.euphoriq.worker;
 import lombok.extern.slf4j.Slf4j;
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.event.Event;
+import net.moznion.euphoriq.event.EventHandler;
 import net.moznion.euphoriq.exception.ActionNotFoundException;
 import net.moznion.euphoriq.exception.JobCanceledException;
 import net.moznion.euphoriq.jobbroker.JobBroker;
@@ -20,12 +22,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static net.moznion.euphoriq.worker.Event.CANCELED;
-import static net.moznion.euphoriq.worker.Event.ERROR;
-import static net.moznion.euphoriq.worker.Event.FAILED;
-import static net.moznion.euphoriq.worker.Event.FINISHED;
-import static net.moznion.euphoriq.worker.Event.STARTED;
-import static net.moznion.euphoriq.worker.Event.TIMEOUT;
+import static net.moznion.euphoriq.event.Event.CANCELED;
+import static net.moznion.euphoriq.event.Event.ERROR;
+import static net.moznion.euphoriq.event.Event.FAILED;
+import static net.moznion.euphoriq.event.Event.FINISHED;
+import static net.moznion.euphoriq.event.Event.STARTED;
+import static net.moznion.euphoriq.event.Event.TIMEOUT;
 
 @Slf4j
 public class SimpleJobWorker implements JobWorker {

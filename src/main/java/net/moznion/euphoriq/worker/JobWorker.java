@@ -1,6 +1,8 @@
 package net.moznion.euphoriq.worker;
 
 import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.event.Event;
+import net.moznion.euphoriq.event.EventHandler;
 
 public interface JobWorker extends Worker {
     // TODO rename
