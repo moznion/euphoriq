@@ -8,10 +8,10 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 @FunctionalInterface
-public interface EventHandler {
+public interface EventHandler<T extends JobBroker> {
     void handle(Event event,
-                JobWorker worker,
-                JobBroker jobBroker,
+                JobWorker<T> worker,
+                T jobBroker,
                 Optional<Class<? extends Action<?>>> actionClass,
                 long id,
                 Object argument,

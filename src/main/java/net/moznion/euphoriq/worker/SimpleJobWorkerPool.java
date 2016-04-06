@@ -2,9 +2,11 @@ package net.moznion.euphoriq.worker;
 
 import javafx.util.Pair;
 import lombok.extern.slf4j.Slf4j;
+
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.event.Event;
 import net.moznion.euphoriq.event.EventHandler;
+import net.moznion.euphoriq.jobbroker.JobBroker;
 import net.moznion.euphoriq.worker.factory.WorkerFactory;
 
 import java.util.ArrayList;
@@ -21,18 +23,18 @@ import java.util.concurrent.ThreadFactory;
 import static net.moznion.euphoriq.event.Event.FAILED;
 
 @Slf4j
-public class SimpleJobWorkerPool implements JobWorker {
+public class SimpleJobWorkerPool<T extends JobBroker> implements JobWorker<T> {
     private final int workerNum;
-    private final WorkerFactory<JobWorker> jobWorkerFactory;
-    private final ConcurrentHashMap<JobWorker, Thread> workerThreadMap;
-    private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
+    private final WorkerFactory<JobWorker<T>> jobWorkerFactory;
+    private final ConcurrentHashMap<JobWorker<T>, Thread> workerThreadMap;
+    private final ConcurrentHashMap<Event, List<EventHandler<T>>> eventHandlerMap;
     private final Optional<Pair<Worker, Thread>> retryWorkerThreadTuple;
 
     private final ThreadFactory threadFactory = Executors.defaultThreadFactory();
-    private final EventHandler workerNumAdjuster =
+    private final EventHandler<T> workerNumAdjuster =
             (event, worker, jobBroker, clazz, id, arg, queueName, timeoutSec, throwable) -> adjustWorkerNum();
 
-    public SimpleJobWorkerPool(final WorkerFactory<JobWorker> jobWorkerFactory,
+    public SimpleJobWorkerPool(final WorkerFactory<JobWorker<T>> jobWorkerFactory,
                                final int workerNum,
                                final Optional<WorkerFactory<Worker>> maybeRetryWorkerFactory) {
         this.workerNum = workerNum;
@@ -47,11 +49,11 @@ public class SimpleJobWorkerPool implements JobWorker {
     }
 
     @Override
-    public <T> void setActionMapping(final Class<T> argumentClass,
-                                     final Class<? extends Action<T>> actionClass) {
+    public <U> void setActionMapping(final Class<U> argumentClass,
+                                     final Class<? extends Action<U>> actionClass) {
         Collections.list(workerThreadMap.keys())
-                .parallelStream()
-                .forEach(w -> w.setActionMapping(argumentClass, actionClass));
+                   .parallelStream()
+                   .forEach(w -> w.setActionMapping(argumentClass, actionClass));
     }
 
     @Override
@@ -63,7 +65,7 @@ public class SimpleJobWorkerPool implements JobWorker {
 
     @Override
     public void join() throws InterruptedException {
-        final Enumeration<JobWorker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker<T>> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().join();
         }
@@ -74,7 +76,7 @@ public class SimpleJobWorkerPool implements JobWorker {
 
     @Override
     public void shutdown(final boolean immediately) {
-        final Enumeration<JobWorker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker<T>> workers = workerThreadMap.keys();
         while (workers.hasMoreElements()) {
             workers.nextElement().shutdown(immediately);
         }
@@ -84,58 +86,58 @@ public class SimpleJobWorkerPool implements JobWorker {
     }
 
     @Override
-    public void addEventHandler(final Event event, final EventHandler handler) {
+    public void addEventHandler(final Event event, final EventHandler<T> handler) {
         eventHandlerMap.get(event).add(handler);
 
         Collections.list(workerThreadMap.keys())
-                .parallelStream()
-                .forEach(w -> w.addEventHandler(event, handler));
+                   .parallelStream()
+                   .forEach(w -> w.addEventHandler(event, handler));
     }
 
     @Override
-    public void setEventHandler(final Event event, final EventHandler handler) {
-        final List<EventHandler> newHandlers =
+    public void setEventHandler(final Event event, final EventHandler<T> handler) {
+        final List<EventHandler<T>> newHandlers =
                 event == FAILED ? getInitialFailedEventHandlers() : new ArrayList<>();
         newHandlers.add(handler);
         eventHandlerMap.put(event, newHandlers);
 
         Collections.list(workerThreadMap.keys())
-                .parallelStream()
-                .forEach(w -> {
-                    w.clearEventHandler(event);
-                    newHandlers.forEach(h -> w.addEventHandler(event, h));
-                });
+                   .parallelStream()
+                   .forEach(w -> {
+                       w.clearEventHandler(event);
+                       newHandlers.forEach(h -> w.addEventHandler(event, h));
+                   });
     }
 
     @Override
     public void clearEventHandler(final Event event) {
-        final List<EventHandler> newHandlers =
+        final List<EventHandler<T>> newHandlers =
                 event == FAILED ? getInitialFailedEventHandlers() : new ArrayList<>();
         eventHandlerMap.put(event, newHandlers);
 
         Collections.list(workerThreadMap.keys())
-                .parallelStream()
-                .forEach(w -> {
-                    w.clearEventHandler(event);
-                    newHandlers.forEach(h -> w.addEventHandler(event, h));
-                });
+                   .parallelStream()
+                   .forEach(w -> {
+                       w.clearEventHandler(event);
+                       newHandlers.forEach(h -> w.addEventHandler(event, h));
+                   });
     }
 
     private void spawnWorker() {
-        final JobWorker worker = jobWorkerFactory.createWorker();
+        final JobWorker<T> worker = jobWorkerFactory.createWorker();
 
-        for (Entry<Event, List<EventHandler>> entry : eventHandlerMap.entrySet()) {
+        for (Entry<Event, List<EventHandler<T>>> entry : eventHandlerMap.entrySet()) {
             final Event event = entry.getKey();
-            final List<EventHandler> eventHandlers = entry.getValue();
+            final List<EventHandler<T>> eventHandlers = entry.getValue();
             eventHandlers.forEach(handler -> worker.addEventHandler(event, handler));
         }
 
         workerThreadMap.put(worker, threadFactory.newThread(worker));
     }
 
-    private ConcurrentHashMap<Event, List<EventHandler>> initializeEventHandlerMap() {
+    private ConcurrentHashMap<Event, List<EventHandler<T>>> initializeEventHandlerMap() {
         final Event[] events = Event.values();
-        final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap =
+        final ConcurrentHashMap<Event, List<EventHandler<T>>> eventHandlerMap =
                 new ConcurrentHashMap<>(events.length);
 
         for (final Event event : events) {
@@ -156,8 +158,8 @@ public class SimpleJobWorkerPool implements JobWorker {
         return Optional.empty();
     }
 
-    private List<EventHandler> getInitialFailedEventHandlers() {
-        final ArrayList<EventHandler> initialFailedEventHandlers = new ArrayList<>();
+    private List<EventHandler<T>> getInitialFailedEventHandlers() {
+        final ArrayList<EventHandler<T>> initialFailedEventHandlers = new ArrayList<>();
         initialFailedEventHandlers.add(workerNumAdjuster);
         return initialFailedEventHandlers;
     }
@@ -183,7 +185,7 @@ public class SimpleJobWorkerPool implements JobWorker {
         }
 
         final int diff = activeWorkersNum - workerNum;
-        final Enumeration<JobWorker> workers = workerThreadMap.keys();
+        final Enumeration<JobWorker<T>> workers = workerThreadMap.keys();
 
         for (int i = 0; i < diff; i++) {
             if (!workers.hasMoreElements()) {
@@ -191,7 +193,7 @@ public class SimpleJobWorkerPool implements JobWorker {
                 break;
             }
 
-            final JobWorker worker = workers.nextElement();
+            final JobWorker<T> worker = workers.nextElement();
             worker.shutdown(false);
             try {
                 worker.join();

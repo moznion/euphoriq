@@ -1,6 +1,7 @@
 package net.moznion.euphoriq.worker;
 
 import lombok.extern.slf4j.Slf4j;
+
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.Job;
 import net.moznion.euphoriq.event.Event;
@@ -30,15 +31,15 @@ import static net.moznion.euphoriq.event.Event.STARTED;
 import static net.moznion.euphoriq.event.Event.TIMEOUT;
 
 @Slf4j
-public class SimpleJobWorker implements JobWorker {
-    private final JobBroker jobBroker;
+public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
+    private final T jobBroker;
     private final ConcurrentHashMap<Class<?>, Class<? extends Action<?>>> actionMap;
     private final AtomicReference<Thread> threadRef;
-    private final ConcurrentHashMap<Event, List<EventHandler>> eventHandlerMap;
+    private final ConcurrentHashMap<Event, List<EventHandler<T>>> eventHandlerMap;
 
     private boolean isShuttingDown;
 
-    public SimpleJobWorker(final JobBroker jobBroker) {
+    public SimpleJobWorker(final T jobBroker) {
         this.jobBroker = jobBroker;
 
         actionMap = new ConcurrentHashMap<>();
@@ -53,8 +54,7 @@ public class SimpleJobWorker implements JobWorker {
     }
 
     @Override
-    public <T> void setActionMapping(final Class<T> argumentClass,
-                                     final Class<? extends Action<T>> actionClass) {
+    public <U> void setActionMapping(Class<U> argumentClass, Class<? extends Action<U>> actionClass) {
         actionMap.put(argumentClass, actionClass);
     }
 
@@ -84,13 +84,13 @@ public class SimpleJobWorker implements JobWorker {
     }
 
     @Override
-    public void addEventHandler(final Event event, final EventHandler handler) {
+    public void addEventHandler(final Event event, final EventHandler<T> handler) {
         eventHandlerMap.get(event).add(handler);
     }
 
     @Override
-    public void setEventHandler(final Event event, final EventHandler handler) {
-        final ArrayList<EventHandler> newHandlers = new ArrayList<>();
+    public void setEventHandler(final Event event, final EventHandler<T> handler) {
+        final ArrayList<EventHandler<T>> newHandlers = new ArrayList<>();
         newHandlers.add(handler);
         eventHandlerMap.put(event, newHandlers);
     }

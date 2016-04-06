@@ -1,30 +1,31 @@
 package net.moznion.euphoriq.worker.factory;
 
+import java.util.OptionalInt;
+
 import net.moznion.euphoriq.jobbroker.JobBroker;
+import net.moznion.euphoriq.jobbroker.RetryableJobBroker;
 import net.moznion.euphoriq.worker.SimpleRetryWorker;
 import net.moznion.euphoriq.worker.Worker;
 
-import java.util.OptionalInt;
-
-public class SimpleRetryWorkerFactory implements WorkerFactory<Worker> {
-    private final JobBroker jobBroker;
+public class SimpleRetryWorkerFactory<T extends JobBroker & RetryableJobBroker> implements WorkerFactory<Worker> {
+    private final T jobBroker;
     private final OptionalInt maybeIntervalMillis;
 
-    public SimpleRetryWorkerFactory(final JobBroker jobBroker) {
+    public SimpleRetryWorkerFactory(final T jobBroker) {
         this.jobBroker = jobBroker;
-        this.maybeIntervalMillis = OptionalInt.empty();
+        maybeIntervalMillis = OptionalInt.empty();
     }
 
-    public SimpleRetryWorkerFactory(final JobBroker jobBroker, final int intervalMillis) {
+    public SimpleRetryWorkerFactory(final T jobBroker, final int intervalMillis) {
         this.jobBroker = jobBroker;
-        this.maybeIntervalMillis = OptionalInt.of(intervalMillis);
+        maybeIntervalMillis = OptionalInt.of(intervalMillis);
     }
 
     @Override
     public Worker createWorker() {
         if (maybeIntervalMillis.isPresent()) {
-            return new SimpleRetryWorker(jobBroker, maybeIntervalMillis.getAsInt());
+            return new SimpleRetryWorker<>(jobBroker, maybeIntervalMillis.getAsInt());
         }
-        return new SimpleRetryWorker(jobBroker);
+        return new SimpleRetryWorker<>(jobBroker);
     }
 }

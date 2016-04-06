@@ -1,22 +1,23 @@
 package net.moznion.euphoriq.worker;
 
-import net.moznion.euphoriq.jobbroker.JobBroker;
-
 import java.util.concurrent.atomic.AtomicReference;
 
-public class SimpleRetryWorker implements Worker {
+import net.moznion.euphoriq.jobbroker.JobBroker;
+import net.moznion.euphoriq.jobbroker.RetryableJobBroker;
+
+public class SimpleRetryWorker<T extends JobBroker & RetryableJobBroker> implements Worker {
     private static final int DEFAULT_INTERVAL_MILLIS = 10000; // 10 sec
 
-    private final JobBroker jobBroker;
+    private final T jobBroker;
     private final int intervalMillis;
     private final AtomicReference<Thread> threadRef;
     private boolean isShuttingDown;
 
-    public SimpleRetryWorker(final JobBroker jobBroker) {
+    public SimpleRetryWorker(final T jobBroker) {
         this(jobBroker, DEFAULT_INTERVAL_MILLIS);
     }
 
-    public SimpleRetryWorker(final JobBroker jobBroker, final int intervalMillis) {
+    public SimpleRetryWorker(final T jobBroker, final int intervalMillis) {
         this.jobBroker = jobBroker;
         this.intervalMillis = intervalMillis;
         isShuttingDown = false;

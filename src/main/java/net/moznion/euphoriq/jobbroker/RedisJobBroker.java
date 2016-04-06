@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -28,7 +29,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
-public class RedisJobBroker implements JobBroker {
+public class RedisJobBroker implements JobBroker, RetryableJobBroker {
     private static final int CURSOR_INITIAL_VALUE = 1;
 
     private final JedisPool jedisPool;

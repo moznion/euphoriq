@@ -1,19 +1,20 @@
 package net.moznion.euphoriq.event;
 
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.jobbroker.JobBroker;
-import net.moznion.euphoriq.worker.JobWorker;
-
 import java.time.Instant;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
 
-public class RetryHandler implements EventHandler {
+import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.jobbroker.JobBroker;
+import net.moznion.euphoriq.jobbroker.RetryableJobBroker;
+import net.moznion.euphoriq.worker.JobWorker;
+
+public class RetryHandler<T extends JobBroker & RetryableJobBroker> implements EventHandler<T> {
     @Override
     public void handle(Event event,
-                       JobWorker worker,
-                       JobBroker jobBroker,
+                       JobWorker<T> worker,
+                       T jobBroker,
                        Optional<Class<? extends Action<?>>> actionClass,
                        long id,
                        Object argument,
@@ -27,7 +28,7 @@ public class RetryHandler implements EventHandler {
         }
 
         final double delay = Math.pow(failedCount, 4) + 15
-                + (new Random(Instant.now().getEpochSecond()).nextInt(30) * (failedCount + 1));
+                             + (new Random(Instant.now().getEpochSecond()).nextInt(30) * (failedCount + 1));
 
         jobBroker.registerRetryJob(id, queueName, argument, timeoutSec, delay);
     }

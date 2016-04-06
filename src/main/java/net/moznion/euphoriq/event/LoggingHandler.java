@@ -1,19 +1,20 @@
 package net.moznion.euphoriq.event;
 
-import lombok.extern.slf4j.Slf4j;
+import java.util.Optional;
+import java.util.OptionalInt;
+
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.jobbroker.JobBroker;
 import net.moznion.euphoriq.worker.JobWorker;
 
-import java.util.Optional;
-import java.util.OptionalInt;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class LoggingHandler implements EventHandler {
+public class LoggingHandler<T extends JobBroker> implements EventHandler<T> {
     @Override
     public void handle(Event event,
-                       JobWorker worker,
-                       JobBroker jobBroker,
+                       JobWorker<T> worker,
+                       T jobBroker,
                        Optional<Class<? extends Action<?>>> actionClass,
                        long id,
                        Object argument,
@@ -23,10 +24,10 @@ public class LoggingHandler implements EventHandler {
         final long threadId = Thread.currentThread().getId();
         if (throwable.isPresent()) {
             log.info("{}: threadId={}, queueName={}, actionClass={}, jobId={}, jobArgument={}",
-                    event.name(), threadId, queueName, actionClass.orElse(null), id, argument, throwable);
+                     event.name(), threadId, queueName, actionClass.orElse(null), id, argument, throwable);
         } else {
             log.info("{}: threadId={}, queueName={}, actionClass={}, jobId={}, jobArgument={}",
-                    event.name(), threadId, queueName, actionClass.orElse(null), id, argument);
+                     event.name(), threadId, queueName, actionClass.orElse(null), id, argument);
         }
     }
 }

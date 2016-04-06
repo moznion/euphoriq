@@ -18,12 +18,4 @@ public interface JobBroker {
     long incrementFailedCount(long id);
 
     long getFailedCount(long id);
-
-    void retry();
-
-    boolean registerRetryJob(final long id,
-                             final String queueName,
-                             final Object arg,
-                             final OptionalInt timeoutSec,
-                             final double delay);
 }
