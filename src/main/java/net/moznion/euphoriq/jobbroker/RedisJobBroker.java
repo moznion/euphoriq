@@ -30,7 +30,8 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 @Slf4j
-public class RedisJobBroker implements JobBroker, RetryableJobBroker, FailedCountManager {
+public class RedisJobBroker
+        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer {
     private static final int CURSOR_INITIAL_VALUE = 1;
 
     private final JedisPool jedisPool;
@@ -181,6 +182,21 @@ public class RedisJobBroker implements JobBroker, RetryableJobBroker, FailedCoun
         return true;
     }
 
+    @Override
+    public long getNumberOfWaitingJobs() {
+        return 0;
+    }
+
+    @Override
+    public long getNumberOfProcessedJobs() {
+        return 0;
+    }
+
+    @Override
+    public long getNumberOfRetryWaitingJobs() {
+        return 0;
+    }
+
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
         final String serializedRetryJobPayload;
         try {
@@ -258,6 +274,10 @@ public class RedisJobBroker implements JobBroker, RetryableJobBroker, FailedCoun
 
     private String getFailedKey() {
         return namespace + "|failed";
+    }
+
+    private String getProcessedCountKey() {
+        return namespace + "|processed_count";
     }
 
     @Data

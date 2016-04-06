@@ -6,12 +6,12 @@ import java.util.OptionalInt;
 import java.util.Random;
 
 import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.jobbroker.FailedCountManager;
+import net.moznion.euphoriq.jobbroker.JobFailedCountManager;
 import net.moznion.euphoriq.jobbroker.JobBroker;
 import net.moznion.euphoriq.jobbroker.RetryableJobBroker;
 import net.moznion.euphoriq.worker.JobWorker;
 
-public class RetryHandler<T extends JobBroker & RetryableJobBroker & FailedCountManager> implements EventHandler<T> {
+public class RetryHandler<T extends JobBroker & RetryableJobBroker & JobFailedCountManager> implements EventHandler<T> {
     @Override
     public void handle(Event event,
                        JobWorker<T> worker,
