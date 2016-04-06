@@ -14,8 +14,4 @@ public interface JobBroker {
     Optional<Job> dequeue() throws JobCanceledException;
 
     void cancel(long id);
-
-    long incrementFailedCount(long id);
-
-    long getFailedCount(long id);
 }

@@ -1,21 +1,5 @@
 package net.moznion.euphoriq.jobbroker;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import net.moznion.euphoriq.Job;
-import net.moznion.euphoriq.exception.JobCanceledException;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
-
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,8 +12,25 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.exception.JobCanceledException;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
+
 @Slf4j
-public class RedisJobBroker implements JobBroker, RetryableJobBroker {
+public class RedisJobBroker implements JobBroker, RetryableJobBroker, FailedCountManager {
     private static final int CURSOR_INITIAL_VALUE = 1;
 
     private final JedisPool jedisPool;
@@ -100,9 +101,9 @@ public class RedisJobBroker implements JobBroker, RetryableJobBroker {
             final long id = jobPayload.getId();
 
             final Job job = new Job(id,
-                    mapper.convertValue(jobPayload.arg, jobPayload.argumentClass),
-                    jobPayload.getQueueName(),
-                    jobPayload.getTimeoutSec());
+                                    mapper.convertValue(jobPayload.arg, jobPayload.argumentClass),
+                                    jobPayload.getQueueName(),
+                                    jobPayload.getTimeoutSec());
 
             if (isCanceledJob(jedis, id)) {
                 throw new JobCanceledException(job);
@@ -149,7 +150,8 @@ public class RedisJobBroker implements JobBroker, RetryableJobBroker {
     @Override
     public void retry() {
         try (final Jedis jedis = jedisPool.getResource()) {
-            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0, Instant.now().getEpochSecond());
+            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0,
+                                                                               Instant.now().getEpochSecond());
             for (final String serializedRetryJobPayload : serializedRetryJobPayloads) {
                 try {
                     final JobPayload jobPayload = mapper.readValue(serializedRetryJobPayload, JobPayload.class);
