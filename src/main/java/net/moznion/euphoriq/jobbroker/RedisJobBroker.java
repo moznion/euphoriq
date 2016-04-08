@@ -110,6 +110,8 @@ public class RedisJobBroker
                 throw new JobCanceledException(job);
             }
 
+            jedis.incr(getProcessedCountKey());
+
             return Optional.of(job);
         } catch (JsonMappingException e) {
             // TODO
@@ -184,17 +186,30 @@ public class RedisJobBroker
 
     @Override
     public long getNumberOfWaitingJobs() {
-        return 0;
+        long num = 0;
+        try (final Jedis jedis = jedisPool.getResource()) {
+            for (final String queue : queuesBag) {
+                final Long len = jedis.llen(getQueueKey(queue));
+                if (len != null) {
+                    num += len;
+                }
+            }
+        }
+        return num;
     }
 
     @Override
     public long getNumberOfProcessedJobs() {
-        return 0;
+        try (final Jedis jedis = jedisPool.getResource()) {
+            return Long.valueOf(jedis.get(getProcessedCountKey()), 10);
+        }
     }
 
     @Override
     public long getNumberOfRetryWaitingJobs() {
-        return 0;
+        try (final Jedis jedis = jedisPool.getResource()) {
+            return jedis.zcard(getFailedKey());
+        }
     }
 
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
