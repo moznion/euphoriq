@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -224,16 +225,27 @@ public class RedisJobBroker
     }
 
     private Optional<String> pickupSerializedPayload(final Jedis jedis) {
+        final Set<String> visitedQueues = new HashSet<>();
+
         int currentCursor = cursor.get();
 
         for (int cnt = queuesSize; cnt > 0; cnt--) {
             final int index = currentCursor - 1;
-            final String job = jedis.rpop(getQueueKey(queues.get(index))); // TODO: care runtime exception
-            if (job != null) {
-                incrementCursor(currentCursor);
-                return Optional.of(job);
+            final String queue = queues.get(index);
+
+            if (!visitedQueues.contains(queue)) {
+                // Visiting queue for the first time
+                final String job = jedis.rpop(getQueueKey(queue)); // TODO: care runtime exception
+                if (job != null) {
+                    incrementCursor(currentCursor);
+                    return Optional.of(job);
+                }
+
+                // queue is empty
+                visitedQueues.add(queue);
             }
 
+            // queue is empty or already visited
             if (currentCursor % queuesSize == 0) {
                 currentCursor = 1;
             } else {
