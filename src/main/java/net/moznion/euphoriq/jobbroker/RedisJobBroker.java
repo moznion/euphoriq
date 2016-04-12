@@ -32,7 +32,7 @@ import redis.clients.jedis.JedisPoolConfig;
 
 @Slf4j
 public class RedisJobBroker
-        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer {
+        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer, Undertaker {
     private static final int CURSOR_INITIAL_VALUE = 1;
 
     private final JedisPool jedisPool;
@@ -213,6 +213,48 @@ public class RedisJobBroker
         }
     }
 
+    @Override
+    public List<Job> getAllDiedJobs() {
+        return getDiedJobs(0, -1);
+    }
+
+    @Override
+    public List<Job> getDiedJobs(long start, long end) {
+        final List<String> items;
+        try (final Jedis jedis = jedisPool.getResource()) {
+            items = jedis.lrange(getMorgueKey(), start, end);
+        }
+
+        final List<Job> jobs = new ArrayList<>();
+        for (final String item : items) {
+            try {
+                jobs.add(mapper.readValue(item, Job.class));
+            } catch (IOException e) {
+                // TODO
+                e.printStackTrace();
+            }
+        }
+
+        return jobs;
+    }
+
+    @Override
+    public long getNumberOfDiedJobs() {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            return jedis.llen(getMorgueKey());
+        }
+    }
+
+    @Override
+    public void sendToMorgue(long id, String queueName, Object argument, OptionalInt timeoutSec) {
+        try (final Jedis jedis = jedisPool.getResource()) {
+            jedis.rpush(mapper.writeValueAsString(new Job(id, argument, queueName, timeoutSec)));
+        } catch (JsonProcessingException e) {
+            // TODO
+            e.printStackTrace();
+        }
+    }
+
     private void enqueue(final Jedis jedis, final JobPayload jobPayload) {
         final String serializedRetryJobPayload;
         try {
@@ -305,6 +347,10 @@ public class RedisJobBroker
 
     private String getProcessedCountKey() {
         return namespace + "|processed_count";
+    }
+
+    private String getMorgueKey() {
+        return namespace + "|morgue";
     }
 
     @Data
