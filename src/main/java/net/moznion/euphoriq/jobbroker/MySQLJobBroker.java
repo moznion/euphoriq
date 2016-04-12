@@ -15,11 +15,13 @@ import net.moznion.euphoriq.exception.JobCanceledException;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 
-public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
+public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedCountManager {
     private final HikariDataSource dataSource;
     private final ObjectMapper mapper;
 
@@ -64,15 +66,30 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
 
     @Override
     public long enqueue(String queueName, Object arg) {
-        return enqueue(queueName, arg, OptionalInt.empty());
+        return enqueue(queueName, arg, arg.getClass().getName(), OptionalInt.empty());
     }
 
     @Override
     public long enqueue(String queueName, Object arg, int timeoutSec) {
-        return enqueue(queueName, arg, OptionalInt.of(timeoutSec));
+        return enqueue(queueName, arg, arg.getClass().getName(), OptionalInt.of(timeoutSec));
     }
 
-    private long enqueue(String queueName, Object arg, OptionalInt timeoutSecOptional) {
+    private long enqueue(String queueName,
+                         Object arg,
+                         String argumentClass,
+                         OptionalInt timeoutSecOptional) {
+        try {
+            return enqueue(queueName, mapper.writeValueAsString(arg), argumentClass, timeoutSecOptional);
+        } catch (JsonProcessingException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long enqueue(String queueName,
+                         String serializedArg,
+                         String argumentClass,
+                         OptionalInt timeoutSecOptional) {
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
 
@@ -82,17 +99,14 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
 
             db.insert(QueueRow.class)
                     .value("id", id)
-                    .value("action_class", arg.getClass())
-                    .value("argument", mapper.writeValueAsString(arg))
+                    .value("argument_class", argumentClass)
+                    .value("argument", serializedArg)
                     .value("queue_name", queueName)
                     .value("timeout_sec", Optional.ofNullable(timeoutSec))
                     .execute();
 
             return id;
         } catch (SQLException e) {
-            // TODO
-            throw new RuntimeException(e);
-        } catch (JsonProcessingException e) {
             // TODO
             throw new RuntimeException(e);
         }
@@ -131,9 +145,14 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
             final Optional<Integer> timeoutSecOptional = queueRow.getTimeoutSec();
             final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
                     OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
-            return Optional.of(new Job(id, queueRow.getArgument(), queueRow.getQueueName(),
+            return Optional.of(new Job(id,
+                    mapper.convertValue(queueRow.getArgument(), Class.forName(queueRow.getArgumentClass())),
+                    queueRow.getQueueName(),
                     timeoutSec));
         } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
             // TODO
             throw new RuntimeException(e);
         }
@@ -156,7 +175,7 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
     public long incrementFailedCount(long id) {
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
-            return db.insert(FailedJobRow.class)
+            return db.insert(FailedJobCountRow.class)
                     .value("id", id)
                     .value("failed_count", 1)
                     .onDuplicateKeyUpdate("failed_count=failed_count+1")
@@ -172,7 +191,7 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
     public long getFailedCount(long id) {
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
-            final Optional<FailedJobRow> failedJobRowOptional = db.single(FailedJobRow.class)
+            final Optional<FailedJobCountRow> failedJobRowOptional = db.single(FailedJobCountRow.class)
                     .where("id=?", id)
                     .execute();
             if (!failedJobRowOptional.isPresent()) {
@@ -183,6 +202,53 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
             // TODO
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void retry() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+            final List<FailedJobRow> failedJobs = db.search(FailedJobRow.class)
+                    .where("retry_at<=?", Instant.now().getEpochSecond())
+                    .execute();
+            for (final FailedJobRow failedJob : failedJobs) {
+                final Optional<Integer> timeoutSecOptional = failedJob.getTimeoutSec();
+                final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
+                        OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
+                enqueue(failedJob.getQueueName(),
+                        failedJob.getArgument(),
+                        failedJob.getArgumentClass(),
+                        timeoutSec);
+            }
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public boolean registerRetryJob(long id, String queueName, Object arg, OptionalInt timeoutSec, double delay) {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+
+            final Optional<Integer> timeoutSecOptional =
+                    timeoutSec.isPresent() ? Optional.of(timeoutSec.getAsInt()) : Optional.empty();
+
+            db.insert(FailedJobRow.class)
+                    .value("id", id)
+                    .value("argument_class", arg.getClass())
+                    .value("argument", mapper.writeValueAsString(arg))
+                    .value("queue_name", queueName)
+                    .value("timeout_sec", timeoutSecOptional)
+                    .value("retry_at", Instant.now().getEpochSecond() + delay);
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+        return true;
     }
 
     @Table("id_pod")
@@ -205,8 +271,8 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
         @Column("id")
         private long id;
 
-        @Column("action_class")
-        private String actionClass;
+        @Column("argument_class")
+        private String argumentClass;
 
         @Column("argument")
         private String argument;
@@ -227,6 +293,18 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
         private long id;
     }
 
+    @Table("failed_job_count")
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    private static class FailedJobCountRow extends Row<FailedJobCountRow> {
+        @PrimaryKey
+        @Column("id")
+        private long id;
+
+        @Column("failed_count")
+        private long failedCount;
+    }
+
     @Table("failed_job")
     @Data
     @EqualsAndHashCode(callSuper = false)
@@ -235,7 +313,19 @@ public class MySQLJobBroker implements JobBroker, JobFailedCountManager {
         @Column("id")
         private long id;
 
-        @Column("failed_count")
-        private long failedCount;
+        @Column("argument_class")
+        private String argumentClass;
+
+        @Column("argument")
+        private String argument;
+
+        @Column("queue_name")
+        private String queueName;
+
+        @Column("timeout_sec")
+        private Optional<Integer> timeoutSec;
+
+        @Column("retry_at")
+        private long retryAt;
     }
 }
