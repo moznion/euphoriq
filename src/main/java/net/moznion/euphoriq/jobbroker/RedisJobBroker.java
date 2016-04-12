@@ -154,8 +154,11 @@ public class RedisJobBroker
     @Override
     public void retry() {
         try (final Jedis jedis = jedisPool.getResource()) {
-            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(getFailedKey(), 0,
-                                                                               Instant.now().getEpochSecond());
+            final long epochSecond = Instant.now().getEpochSecond();
+            final String failedKey = getFailedKey();
+
+            final Set<String> serializedRetryJobPayloads = jedis.zrangeByScore(failedKey, 0, epochSecond);
+            jedis.zremrangeByScore(failedKey, 0, epochSecond);
             for (final String serializedRetryJobPayload : serializedRetryJobPayloads) {
                 try {
                     final JobPayload jobPayload = mapper.readValue(serializedRetryJobPayload, JobPayload.class);
