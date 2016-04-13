@@ -106,6 +106,7 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
         eventHandlerMap.put(event, new ArrayList<>());
     }
 
+    @SuppressWarnings("unchecked")
     private void poll() {
         while (!isShuttingDown) {
             final Optional<Job> maybeJob;
@@ -124,8 +125,7 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
                 try {
                     Thread.sleep(1000); // TODO sleep time should be configurable?
                 } catch (InterruptedException e) {
-                    // TODO more suitable error handling
-                    log.error("Failed to sleep");
+                    log.warn("Interrupted in sleep");
                 }
                 continue;
             }
