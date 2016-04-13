@@ -53,3 +53,16 @@ CREATE TABLE `counter` (
 )
   ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE `morgue` (
+  `sequence_numper` BIGINT       NOT NULL AUTO_INCREMENT,
+  `id`              BIGINT       NOT NULL,
+  `argument_class`  VARCHAR(255) NOT NULL,
+  `argument`        TEXT         NOT NULL,
+  `queue_name`      VARCHAR(255) NOT NULL,
+  `timeout_sec`     INT                   DEFAULT NULL,
+  PRIMARY KEY (`sequence_numper`),
+  UNIQUE (`id`)
+)
+  ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;

@@ -3,6 +3,7 @@ package net.moznion.euphoriq.jobbroker;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +25,7 @@ import me.geso.tinyorm.annotations.PrimaryKey;
 import me.geso.tinyorm.annotations.Table;
 
 public class MySQLJobBroker
-        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer {
+        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer, Undertaker {
     private static final String PROCESSED_JOB_COUNT_TYPE = "processed_job";
 
     private final HikariDataSource dataSource;
@@ -316,6 +317,104 @@ public class MySQLJobBroker
         }
     }
 
+    @Override
+    public List<Job> getAllDiedJobs() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+
+            final List<MorgueRow> rows = db.search(MorgueRow.class)
+                                           .execute();
+
+            final List<Job> jobs = new ArrayList<>(rows.size());
+            for (MorgueRow row : rows) {
+                final Optional<Integer> timeoutSecOptional = row.getTimeoutSec();
+                final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
+                        OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
+
+                final Job job = new Job(row.getId(),
+                                        mapper.convertValue(row.getArgument(), Class.forName(row.getArgumentClass())),
+                                        row.getQueueName(),
+                                        timeoutSec);
+                jobs.add(job);
+            }
+            return jobs;
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public List<Job> getDiedJobs(long start, long end) {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+
+            final List<MorgueRow> rows = db.search(MorgueRow.class)
+                                           .limit(end - start)
+                                           .offset(start)
+                                           .execute(); // XXX not good query
+
+            final List<Job> jobs = new ArrayList<>(rows.size());
+            for (MorgueRow row : rows) {
+                final Optional<Integer> timeoutSecOptional = row.getTimeoutSec();
+                final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
+                        OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
+
+                final Job job = new Job(row.getId(),
+                        mapper.convertValue(row.getArgument(), Class.forName(row.getArgumentClass())),
+                        row.getQueueName(),
+                        timeoutSec);
+                jobs.add(job);
+            }
+            return jobs;
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public long getNumberOfDiedJobs() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+            return db.count(MorgueRow.class)
+                     .execute();
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void sendToMorgue(long id, String queueName, Object argument, OptionalInt timeoutSec) {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+
+            final Optional<Integer> timeoutSecOptional =
+                    timeoutSec.isPresent() ? Optional.of(timeoutSec.getAsInt()) : Optional.empty();
+
+            db.insert(MorgueRow.class)
+              .value("id", id)
+              .value("argument_class", argument.getClass().getName())
+              .value("argument", mapper.writeValueAsString(argument))
+              .value("queue_name", queueName)
+              .value("timeout_sec", timeoutSecOptional)
+              .execute();
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
     @Table("id_pod")
     @Data
     @EqualsAndHashCode(callSuper = false)
@@ -403,5 +502,29 @@ public class MySQLJobBroker
         private String type;
         @Column("count")
         private long count;
+    }
+
+    @Table("morgue")
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    private static class MorgueRow extends Row<MorgueRow> {
+        @PrimaryKey
+        @Column("sequence_number")
+        private long sequenceNumber;
+
+        @Column("id")
+        private long id;
+
+        @Column("argument_class")
+        private String argumentClass;
+
+        @Column("argument")
+        private String argument;
+
+        @Column("queue_name")
+        private String queueName;
+
+        @Column("timeout_sec")
+        private Optional<Integer> timeoutSec;
     }
 }
