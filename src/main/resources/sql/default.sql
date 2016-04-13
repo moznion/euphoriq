@@ -45,3 +45,11 @@ CREATE TABLE `failed_job` (
 )
   ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE `counter` (
+  `type`  VARCHAR(50) NOT NULL,
+  `count` BIGINT      NOT NULL,
+  PRIMARY KEY (`type`)
+)
+  ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4;

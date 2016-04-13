@@ -23,11 +23,14 @@ import me.geso.tinyorm.annotations.Column;
 import me.geso.tinyorm.annotations.PrimaryKey;
 import me.geso.tinyorm.annotations.Table;
 
-public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedCountManager {
+public class MySQLJobBroker
+        implements JobBroker, RetryableJobBroker, JobFailedCountManager, QueueStatusDiscoverer {
+    private static final String PROCESSED_JOB_COUNT_TYPE = "processed_job";
+
     private final HikariDataSource dataSource;
     private final ObjectMapper mapper;
 
-    public MySQLJobBroker(final String url, // e.g. jdbc:mysql://localhost/euphoriq
+    public MySQLJobBroker(final String url, // e.g. jdbc:mysql://localhost:3306/euphoriq
                           final String user,
                           final String password,
                           final int connectionNum,
@@ -138,20 +141,29 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
             final long id = queueRow.getId();
             final Optional<CanceledJobRow> canceledJobRowOptional =
                     db.single(CanceledJobRow.class).where("id=?", id).execute();
-            if (canceledJobRowOptional.isPresent()) {
-                // canceled
-                db.delete(canceledJobRowOptional.get());
-                return Optional.empty();
-            }
 
             final Optional<Integer> timeoutSecOptional = queueRow.getTimeoutSec();
             final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
                                            OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
-            return Optional.of(new Job(id,
-                                       mapper.convertValue(queueRow.getArgument(), Class.forName(
-                                               queueRow.getArgumentClass())),
-                                       queueRow.getQueueName(),
-                                       timeoutSec));
+            final Job job = new Job(id,
+                                    mapper.convertValue(queueRow.getArgument(), Class.forName(
+                                            queueRow.getArgumentClass())),
+                                    queueRow.getQueueName(),
+                                    timeoutSec);
+
+            if (canceledJobRowOptional.isPresent()) {
+                // canceled
+                db.delete(canceledJobRowOptional.get());
+                throw new JobCanceledException(job);
+            }
+
+            db.insert(CounterRow.class)
+              .value("type", PROCESSED_JOB_COUNT_TYPE)
+              .value("count", 1)
+              .onDuplicateKeyUpdate("count=count+1")
+              .execute();
+
+            return Optional.of(job);
         } catch (SQLException e) {
             // TODO
             throw new RuntimeException(e);
@@ -262,6 +274,48 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
         return true;
     }
 
+    @Override
+    public long getNumberOfWaitingJobs() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+            return db.count(QueueRow.class)
+                     .execute();
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public long getNumberOfProcessedJobs() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+            final Optional<CounterRow> processedJobCountRowOptional = db.single(CounterRow.class)
+                                                                        .where("type=?",
+                                                                               PROCESSED_JOB_COUNT_TYPE)
+                                                                        .execute();
+            if (!processedJobCountRowOptional.isPresent()) {
+                return 0;
+            }
+            return processedJobCountRowOptional.get().getCount();
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public long getNumberOfRetryWaitingJobs() {
+        try (final Connection conn = dataSource.getConnection()) {
+            final TinyORM db = new TinyORM(conn);
+            return db.count(FailedJobRow.class)
+                     .execute();
+        } catch (SQLException e) {
+            // TODO
+            throw new RuntimeException(e);
+        }
+    }
+
     @Table("id_pod")
     @Data
     @EqualsAndHashCode(callSuper = false)
@@ -304,6 +358,7 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
         private long id;
     }
 
+    // TODO rename
     @Table("failed_job_count")
     @Data
     @EqualsAndHashCode(callSuper = false)
@@ -338,5 +393,15 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
 
         @Column("retry_at")
         private long retryAt;
+    }
+
+    @Table("counter")
+    @Data
+    @EqualsAndHashCode(callSuper = false)
+    private static class CounterRow extends Row<CounterRow> {
+        @PrimaryKey
+        private String type;
+        @Column("count")
+        private long count;
     }
 }
