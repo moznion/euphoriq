@@ -64,6 +64,12 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
         poll();
     }
 
+    public void start() {
+        threadRef.set(Thread.currentThread());
+        final Thread thread = Executors.defaultThreadFactory().newThread(this);
+        thread.start();
+    }
+
     @Override
     public void join() throws InterruptedException {
         final Thread thread = threadRef.get();
