@@ -1,18 +1,5 @@
 package net.moznion.euphoriq.jobbroker;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.zaxxer.hikari.HikariDataSource;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import me.geso.tinyorm.Row;
-import me.geso.tinyorm.TinyORM;
-import me.geso.tinyorm.annotations.Column;
-import me.geso.tinyorm.annotations.PrimaryKey;
-import me.geso.tinyorm.annotations.Table;
-import net.moznion.euphoriq.Job;
-import net.moznion.euphoriq.exception.JobCanceledException;
-
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -20,6 +7,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+
+import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.exception.JobCanceledException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zaxxer.hikari.HikariDataSource;
+
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import me.geso.tinyorm.Row;
+import me.geso.tinyorm.TinyORM;
+import me.geso.tinyorm.annotations.Column;
+import me.geso.tinyorm.annotations.PrimaryKey;
+import me.geso.tinyorm.annotations.Table;
 
 public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedCountManager {
     private final HikariDataSource dataSource;
@@ -98,12 +100,12 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
             final long id = db.insert(IDPodRow.class).executeSelect().getId();
 
             db.insert(QueueRow.class)
-                    .value("id", id)
-                    .value("argument_class", argumentClass)
-                    .value("argument", serializedArg)
-                    .value("queue_name", queueName)
-                    .value("timeout_sec", Optional.ofNullable(timeoutSec))
-                    .execute();
+              .value("id", id)
+              .value("argument_class", argumentClass)
+              .value("argument", serializedArg)
+              .value("queue_name", queueName)
+              .value("timeout_sec", Optional.ofNullable(timeoutSec))
+              .execute();
 
             return id;
         } catch (SQLException e) {
@@ -144,11 +146,12 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
 
             final Optional<Integer> timeoutSecOptional = queueRow.getTimeoutSec();
             final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
-                    OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
+                                           OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
             return Optional.of(new Job(id,
-                    mapper.convertValue(queueRow.getArgument(), Class.forName(queueRow.getArgumentClass())),
-                    queueRow.getQueueName(),
-                    timeoutSec));
+                                       mapper.convertValue(queueRow.getArgument(), Class.forName(
+                                               queueRow.getArgumentClass())),
+                                       queueRow.getQueueName(),
+                                       timeoutSec));
         } catch (SQLException e) {
             // TODO
             throw new RuntimeException(e);
@@ -163,8 +166,8 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
             db.insert(CanceledJobRow.class)
-                    .value("id", id)
-                    .execute();
+              .value("id", id)
+              .execute();
         } catch (SQLException e) {
             // TODO
             throw new RuntimeException(e);
@@ -176,11 +179,11 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
             return db.insert(FailedJobCountRow.class)
-                    .value("id", id)
-                    .value("failed_count", 1)
-                    .onDuplicateKeyUpdate("failed_count=failed_count+1")
-                    .executeSelect()
-                    .getFailedCount();
+                     .value("id", id)
+                     .value("failed_count", 1)
+                     .onDuplicateKeyUpdate("failed_count=failed_count+1")
+                     .executeSelect()
+                     .getFailedCount();
         } catch (SQLException e) {
             // TODO
             throw new RuntimeException(e);
@@ -192,8 +195,8 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
             final Optional<FailedJobCountRow> failedJobRowOptional = db.single(FailedJobCountRow.class)
-                    .where("id=?", id)
-                    .execute();
+                                                                       .where("id=?", id)
+                                                                       .execute();
             if (!failedJobRowOptional.isPresent()) {
                 return 0L;
             }
@@ -208,13 +211,20 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
     public void retry() {
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
+
+            db.executeQuery("LOCK TABLES failed_job WRITE");
+
             final List<FailedJobRow> failedJobs = db.search(FailedJobRow.class)
-                    .where("retry_at<=?", Instant.now().getEpochSecond())
-                    .execute();
+                                                    .where("retry_at<=?", Instant.now().getEpochSecond())
+                                                    .execute();
+            failedJobs.forEach(db::delete);
+
+            db.executeQuery("UNLOCK TABLES");
+
             for (final FailedJobRow failedJob : failedJobs) {
                 final Optional<Integer> timeoutSecOptional = failedJob.getTimeoutSec();
                 final OptionalInt timeoutSec = timeoutSecOptional.isPresent() ?
-                        OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
+                                               OptionalInt.of(timeoutSecOptional.get()) : OptionalInt.empty();
                 enqueue(failedJob.getQueueName(),
                         failedJob.getArgument(),
                         failedJob.getArgumentClass(),
@@ -227,7 +237,8 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
     }
 
     @Override
-    public boolean registerRetryJob(long id, String queueName, Object arg, OptionalInt timeoutSec, double delay) {
+    public boolean registerRetryJob(long id, String queueName, Object arg, OptionalInt timeoutSec,
+                                    double delay) {
         try (final Connection conn = dataSource.getConnection()) {
             final TinyORM db = new TinyORM(conn);
 
@@ -235,12 +246,12 @@ public class MySQLJobBroker implements JobBroker, RetryableJobBroker, JobFailedC
                     timeoutSec.isPresent() ? Optional.of(timeoutSec.getAsInt()) : Optional.empty();
 
             db.insert(FailedJobRow.class)
-                    .value("id", id)
-                    .value("argument_class", arg.getClass())
-                    .value("argument", mapper.writeValueAsString(arg))
-                    .value("queue_name", queueName)
-                    .value("timeout_sec", timeoutSecOptional)
-                    .value("retry_at", Instant.now().getEpochSecond() + delay);
+              .value("id", id)
+              .value("argument_class", arg.getClass())
+              .value("argument", mapper.writeValueAsString(arg))
+              .value("queue_name", queueName)
+              .value("timeout_sec", timeoutSecOptional)
+              .value("retry_at", Instant.now().getEpochSecond() + delay);
         } catch (SQLException e) {
             // TODO
             throw new RuntimeException(e);
