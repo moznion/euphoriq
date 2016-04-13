@@ -1,4 +1,4 @@
-euphoriq
+euphoriq [![Build Status](https://travis-ci.org/moznion/euphoriq.svg?branch=master)](https://travis-ci.org/moznion/euphoriq)
 ==
 
 euphoriq is a simple framework for job-queue and worker system.
