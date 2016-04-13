@@ -31,11 +31,11 @@ public class SimpleJobWorkerTest {
     @Test
     public void testBasic() throws Exception {
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test1")).isNull();
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test2")).isNull();
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test3")).isNull();
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "1234")).isNull();
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "5678")).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test1")).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test2")).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test3")).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "1234")).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "5678")).isNull();
         }
 
         final String queueName = "normal-queue";
@@ -63,11 +63,11 @@ public class SimpleJobWorkerTest {
         worker.join();
 
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test1")).isEqualTo("foobar");
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test2")).isEqualTo("foobar");
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "test3")).isEqualTo("foobar");
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "1234")).isEqualTo("buzqux");
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|" + "5678")).isEqualTo("buzqux");
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test1")).isEqualTo("foobar");
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test2")).isEqualTo("foobar");
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "test3")).isEqualTo("foobar");
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "1234")).isEqualTo("buzqux");
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|" + "5678")).isEqualTo("buzqux");
         }
     }
 
@@ -92,32 +92,32 @@ public class SimpleJobWorkerTest {
         worker.setActionMapping(TimeoutArgument.class, TimeoutAction.class);
         worker.addEventHandler(Event.STARTED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|started|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|started|" + id, String.valueOf(id));
             }
         });
         worker.addEventHandler(Event.FINISHED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|finished|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|finished|" + id, String.valueOf(id));
             }
         });
         worker.addEventHandler(Event.CANCELED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|canceled|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|canceled|" + id, String.valueOf(id));
             }
         });
         worker.addEventHandler(Event.FAILED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|failed|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|failed|" + id, String.valueOf(id));
             }
         });
         worker.addEventHandler(Event.ERROR, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|error|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|error|" + id, String.valueOf(id));
             }
         });
         worker.addEventHandler(Event.TIMEOUT, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|timeout|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|timeout|" + id, String.valueOf(id));
             }
         });
 
@@ -129,12 +129,12 @@ public class SimpleJobWorkerTest {
         worker.join();
 
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|started|" + id1)).isEqualTo(String.valueOf(id1));
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|finished|" + id1)).isEqualTo(String.valueOf(id1));
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|canceled|" + cancelId)).isEqualTo(String.valueOf(cancelId));
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|failed|" + failedId)).isEqualTo(String.valueOf(failedId));
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|error|" + errorId)).isEqualTo(String.valueOf(errorId));
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|timeout|" + timeoutId)).isEqualTo(String.valueOf(timeoutId));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|started|" + id1)).isEqualTo(String.valueOf(id1));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|finished|" + id1)).isEqualTo(String.valueOf(id1));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|canceled|" + cancelId)).isEqualTo(String.valueOf(cancelId));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|failed|" + failedId)).isEqualTo(String.valueOf(failedId));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|error|" + errorId)).isEqualTo(String.valueOf(errorId));
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|timeout|" + timeoutId)).isEqualTo(String.valueOf(timeoutId));
         }
     }
 
@@ -152,7 +152,7 @@ public class SimpleJobWorkerTest {
         worker.setActionMapping(FooArgument.class, FooAction.class);
         worker.addEventHandler(Event.STARTED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|started|" + id, String.valueOf(id));
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|started|" + id, String.valueOf(id));
             }
         });
         worker.clearEventHandler(Event.STARTED);
@@ -165,7 +165,7 @@ public class SimpleJobWorkerTest {
         worker.join();
 
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|started|" + id1)).isNull();
+            assertThat(jedis.get(NAMESPACE_FOR_TESTING + "|XXX|started|" + id1)).isNull();
         }
     }
 
@@ -182,7 +182,7 @@ public class SimpleJobWorkerTest {
         @Override
         public void run() {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|" + fooArgument.getLabel(), "foobar");
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|" + fooArgument.getLabel(), "foobar");
             }
         }
 
@@ -210,7 +210,7 @@ public class SimpleJobWorkerTest {
         @Override
         public void run() {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|" + barArgument.getNum(), "buzqux");
+                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|" + barArgument.getNum(), "buzqux");
             }
         }
     }
