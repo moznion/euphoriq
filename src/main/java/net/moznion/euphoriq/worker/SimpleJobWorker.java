@@ -75,7 +75,11 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
     @Override
     public void join() throws InterruptedException {
         final Thread thread = threadRef.get();
-        if (thread != null && thread.isAlive()) {
+        if (thread == null) {
+            log.info("No such worker for joining");
+        } else if (!thread.isAlive()) {
+            log.info("Worker already finished [thread id: {}]", thread.getId());
+        } else {
             log.info("Waiting for joining [thread id: {}]", thread.getId());
             thread.join();
             log.info("Worker joined [thread id: {}]", thread.getId());
