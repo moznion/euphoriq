@@ -65,8 +65,8 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
     }
 
     public void start() {
-        threadRef.set(Thread.currentThread());
         final Thread thread = Executors.defaultThreadFactory().newThread(this);
+        threadRef.set(thread);
         thread.start();
     }
 
