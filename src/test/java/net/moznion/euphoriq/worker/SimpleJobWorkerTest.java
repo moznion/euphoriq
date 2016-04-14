@@ -28,7 +28,7 @@ public class SimpleJobWorkerTest {
     @Before
     public void setup() throws Exception {
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-            jedis.keys(NAMESPACE_FOR_TESTING + "*").forEach(jedis::del);
+            jedis.keys(NAMESPACE_FOR_TESTING + '*').forEach(jedis::del);
         }
     }
 
