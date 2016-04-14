@@ -62,7 +62,7 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
     public void run() {
         final Thread thread = Thread.currentThread();
         threadRef.set(thread);
-        log.info("Worker started [thread id: {}]", thread.getId());
+        log.info("Worker started [threadId={}]", thread.getId());
         poll();
     }
 
@@ -78,18 +78,18 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
         if (thread == null) {
             log.info("No such worker for joining");
         } else if (!thread.isAlive()) {
-            log.info("Worker already finished [thread id: {}]", thread.getId());
+            log.info("Worker already finished [threadId={}]", thread.getId());
         } else {
-            log.info("Waiting for joining [thread id: {}]", thread.getId());
+            log.info("Waiting for joining [threadId={}]", thread.getId());
             thread.join();
-            log.info("Worker joined [thread id: {}]", thread.getId());
+            log.info("Worker joined [threadId={}]", thread.getId());
         }
     }
 
     @Override
     public void shutdown(final boolean immediately) {
         final Thread thread = threadRef.get();
-        log.info("Worker attempts to shutdown [thread id: {}, immediately: {}]", thread.getId(), immediately);
+        log.info("Worker attempts to shutdown [threadId={}, immediately={}]", thread.getId(), immediately);
         isShuttingDown = true;
         if (immediately) {
             if (thread != null && thread.isAlive()) {
@@ -186,7 +186,7 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
             handleFinishedEvent(actionClass, id, arg, queueName, maybeTimeoutSec);
         }
 
-        log.info("Worker shutdown[thread id: {}]", threadRef.get().getId());
+        log.info("Worker shutdown[threadId={}]", threadRef.get().getId());
     }
 
     private void handleStartedEvent(final Class<? extends Action<?>> actionClass,
