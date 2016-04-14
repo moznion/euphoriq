@@ -1,14 +1,11 @@
 package net.moznion.euphoriq.worker;
 
-import lombok.extern.slf4j.Slf4j;
-
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.Job;
-import net.moznion.euphoriq.event.Event;
-import net.moznion.euphoriq.event.EventHandler;
-import net.moznion.euphoriq.exception.ActionNotFoundException;
-import net.moznion.euphoriq.exception.JobCanceledException;
-import net.moznion.euphoriq.jobbroker.JobBroker;
+import static net.moznion.euphoriq.event.Event.CANCELED;
+import static net.moznion.euphoriq.event.Event.ERROR;
+import static net.moznion.euphoriq.event.Event.FAILED;
+import static net.moznion.euphoriq.event.Event.FINISHED;
+import static net.moznion.euphoriq.event.Event.STARTED;
+import static net.moznion.euphoriq.event.Event.TIMEOUT;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +20,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static net.moznion.euphoriq.event.Event.CANCELED;
-import static net.moznion.euphoriq.event.Event.ERROR;
-import static net.moznion.euphoriq.event.Event.FAILED;
-import static net.moznion.euphoriq.event.Event.FINISHED;
-import static net.moznion.euphoriq.event.Event.STARTED;
-import static net.moznion.euphoriq.event.Event.TIMEOUT;
+import net.moznion.euphoriq.Action;
+import net.moznion.euphoriq.Job;
+import net.moznion.euphoriq.event.Event;
+import net.moznion.euphoriq.event.EventHandler;
+import net.moznion.euphoriq.exception.ActionNotFoundException;
+import net.moznion.euphoriq.exception.JobCanceledException;
+import net.moznion.euphoriq.jobbroker.JobBroker;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
@@ -60,7 +60,9 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
 
     @Override
     public void run() {
-        threadRef.set(Thread.currentThread());
+        final Thread thread = Thread.currentThread();
+        threadRef.set(thread);
+        log.info("Worker started [thread id: {}]", thread.getId());
         poll();
     }
 
@@ -74,15 +76,18 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
     public void join() throws InterruptedException {
         final Thread thread = threadRef.get();
         if (thread != null && thread.isAlive()) {
+            log.info("Waiting for joining [thread id: {}]", thread.getId());
             thread.join();
+            log.info("Worker joined [thread id: {}]", thread.getId());
         }
     }
 
     @Override
     public void shutdown(final boolean immediately) {
+        final Thread thread = threadRef.get();
+        log.info("Worker attempts to shutdown [thread id: {}, immediately: {}]", thread.getId(), immediately);
         isShuttingDown = true;
         if (immediately) {
-            final Thread thread = threadRef.get();
             if (thread != null && thread.isAlive()) {
                 threadRef.get().interrupt();
             }
@@ -176,6 +181,8 @@ public class SimpleJobWorker<T extends JobBroker> implements JobWorker<T> {
 
             handleFinishedEvent(actionClass, id, arg, queueName, maybeTimeoutSec);
         }
+
+        log.info("Worker shutdown[thread id: {}]", threadRef.get().getId());
     }
 
     private void handleStartedEvent(final Class<? extends Action<?>> actionClass,
