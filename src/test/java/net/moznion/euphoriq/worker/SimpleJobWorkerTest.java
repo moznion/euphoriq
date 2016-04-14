@@ -1,28 +1,30 @@
 package net.moznion.euphoriq.worker;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import net.moznion.euphoriq.Action;
-import net.moznion.euphoriq.event.Event;
-import net.moznion.euphoriq.jobbroker.RedisJobBroker;
-import net.moznion.euphoriq.worker.factory.SimpleJobWorkerFactory;
-
-import org.junit.Before;
-import org.junit.Test;
-import redis.clients.jedis.Jedis;
+import static net.moznion.euphoriq.misc.Constant.NAMESPACE_FOR_TESTING;
+import static net.moznion.euphoriq.misc.Constant.REDIS_HOST;
+import static net.moznion.euphoriq.misc.Constant.REDIS_PORT;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.HashMap;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.Before;
+import org.junit.Test;
+
+import net.moznion.euphoriq.event.Event;
+import net.moznion.euphoriq.jobbroker.RedisJobBroker;
+import net.moznion.euphoriq.misc.action.BarAction;
+import net.moznion.euphoriq.misc.action.FailAction;
+import net.moznion.euphoriq.misc.action.FooAction;
+import net.moznion.euphoriq.misc.action.TimeoutAction;
+import net.moznion.euphoriq.misc.argument.BarArgument;
+import net.moznion.euphoriq.misc.argument.FailArgument;
+import net.moznion.euphoriq.misc.argument.FooArgument;
+import net.moznion.euphoriq.misc.argument.TimeoutArgument;
+import net.moznion.euphoriq.worker.factory.SimpleJobWorkerFactory;
+
+import redis.clients.jedis.Jedis;
 
 public class SimpleJobWorkerTest {
-    private static final String REDIS_HOST = "127.0.0.1";
-    private static final int REDIS_PORT = 6379;
-    private static final String NAMESPACE_FOR_TESTING = "euphoriq-test";
-
     @Before
     public void setup() throws Exception {
         try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
@@ -171,85 +173,4 @@ public class SimpleJobWorkerTest {
         }
     }
 
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class FooArgument {
-        private String label;
-    }
-
-    public static class FooAction implements Action<FooArgument> {
-        private FooArgument fooArgument;
-
-        @Override
-        public void run() {
-            try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|" + fooArgument.getLabel(), "foobar");
-            }
-        }
-
-        @Override
-        public void setArg(FooArgument arg) {
-            this.fooArgument = arg;
-        }
-    }
-
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class BarArgument {
-        private int num;
-    }
-
-    public static class BarAction implements Action<BarArgument> {
-        private BarArgument barArgument;
-
-        @Override
-        public void setArg(BarArgument arg) {
-            this.barArgument = arg;
-        }
-
-        @Override
-        public void run() {
-            try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
-                jedis.set(NAMESPACE_FOR_TESTING + "|XXX|" + barArgument.getNum(), "buzqux");
-            }
-        }
-    }
-
-    @Data
-    @JsonAutoDetect(fieldVisibility = Visibility.ANY)
-    public static class FailArgument {
-    }
-
-    public static class FailAction implements Action<FailArgument> {
-        @Override
-        public void setArg(FailArgument arg) {
-        }
-
-        @Override
-        public void run() {
-            throw new RuntimeException();
-        }
-    }
-
-    @Data
-    @JsonAutoDetect(fieldVisibility = Visibility.ANY)
-    public static class TimeoutArgument {
-    }
-
-    public static class TimeoutAction implements Action<TimeoutArgument> {
-        @Override
-        public void setArg(TimeoutArgument arg) {
-        }
-
-        @Override
-        public void run() {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException();
-            }
-        }
-    }
 }
