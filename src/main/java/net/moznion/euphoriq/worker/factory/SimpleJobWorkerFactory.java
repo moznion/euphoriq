@@ -12,7 +12,7 @@ public class SimpleJobWorkerFactory<T extends JobBroker> implements WorkerFactor
     }
 
     @Override
-    public JobWorker<T> createWorker() {
-        return new SimpleJobWorker<T>(jobBroker);
+    public SimpleJobWorker<T> createWorker() {
+        return new SimpleJobWorker<>(jobBroker);
     }
 }

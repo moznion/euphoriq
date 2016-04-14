@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 import net.moznion.euphoriq.Action;
 import net.moznion.euphoriq.event.Event;
 import net.moznion.euphoriq.jobbroker.RedisJobBroker;
+import net.moznion.euphoriq.worker.factory.SimpleJobWorkerFactory;
+
 import org.junit.Before;
 import org.junit.Test;
 import redis.clients.jedis.Jedis;
@@ -51,7 +53,7 @@ public class SimpleJobWorkerTest {
         jobBroker.enqueue(queueName, new BarArgument(5678));
         jobBroker.enqueue(queueName, new FooArgument("test3"));
 
-        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorker<>(jobBroker);
+        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorkerFactory<>(jobBroker).createWorker();
         worker.setActionMapping(FooArgument.class, FooAction.class);
         worker.setActionMapping(BarArgument.class, BarAction.class);
 
@@ -86,7 +88,7 @@ public class SimpleJobWorkerTest {
         final long timeoutId = jobBroker.enqueue(queueName, new TimeoutArgument(), 1);
         jobBroker.cancel(cancelId);
 
-        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorker<>(jobBroker);
+        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorkerFactory<>(jobBroker).createWorker();
         worker.setActionMapping(FooArgument.class, FooAction.class);
         worker.setActionMapping(FailArgument.class, FailAction.class);
         worker.setActionMapping(TimeoutArgument.class, TimeoutAction.class);
@@ -148,7 +150,7 @@ public class SimpleJobWorkerTest {
                 new RedisJobBroker(NAMESPACE_FOR_TESTING, weightedQueues, REDIS_HOST, REDIS_PORT, 10);
         final long id1 = jobBroker.enqueue(queueName, new FooArgument("test1"));
 
-        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorker<>(jobBroker);
+        final SimpleJobWorker<RedisJobBroker> worker = new SimpleJobWorkerFactory<>(jobBroker).createWorker();
         worker.setActionMapping(FooArgument.class, FooAction.class);
         worker.addEventHandler(Event.STARTED, (event, w, jb, actionClass, id, argument, qn, timeoutSec, throwable) -> {
             try (final Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
